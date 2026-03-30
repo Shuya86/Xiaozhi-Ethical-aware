@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Xiaozhi Text Chat</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+      margin:0;background:#f5f7fb;}
+    .wrap{max-width:900px;margin:24px auto;padding:16px;}
+    .card{background:#fff;border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.06);
+      overflow:hidden;}
+    .head{padding:14px 16px;border-bottom:1px solid #eee;font-weight:700;}
+    .msgs{height:62vh;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px;}
+    .row{display:flex;}
+    .me{justify-content:flex-end;}
+    .bot{justify-content:flex-start;}
+    .bubble{max-width:75%;padding:10px 12px;border-radius:14px;line-height:1.45;
+      white-space:pre-wrap;word-break:break-word;}
+    .me .bubble{background:#1a73e8;color:#fff;border-bottom-right-radius:4px;}
+    .bot .bubble{background:#f0f2f5;color:#111;border-bottom-left-radius:4px;}
+    .foot{display:flex;gap:10px;padding:12px;border-top:1px solid #eee;align-items:center;}
+    input{flex:1;border:1px solid #ddd;border-radius:12px;padding:12px 12px;font-size:16px;outline:none;}
+    button{border:none;border-radius:12px;padding:12px 14px;font-size:16px;cursor:pointer;}
+    button.send{background:#1a73e8;color:#fff;}
+    button.send:disabled{opacity:.6;cursor:not-allowed;}
+    .hint{padding:0 16px 12px;color:#666;font-size:13px;}
+    .small{font-size:12px;color:#777;margin-left:auto}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="head">Xiaozhi · Text Input</div>
+      <div class="hint">
+        Type your message here → it will be sent to the backend <b>/text</b> API → the reply will show below.
+        <span class="small" id="status">ready</span>
+      </div>
+      <div class="msgs" id="msgs"></div>
+      <div class="foot">
+        <input id="input" placeholder="Type a message... (Enter to send, Shift+Enter for newline)" />
+        <button class="send" id="btn">Send</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // Backend text endpoint (same-origin by default)
+  const API = "/text";
+
+  const msgs = document.getElementById("msgs");
+  const input = document.getElementById("input");
+  const btn = document.getElementById("btn");
+  const statusEl = document.getElementById("status");
+
+  function addMsg(role, text){
+    const row = document.createElement("div");
+    row.className = "row " + (role === "me" ? "me" : "bot");
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = text;
+    row.appendChild(bubble);
+    msgs.appendChild(row);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  async function send(){
+    const text = input.value.trim();
+    if(!text) return;
+
+    addMsg("me", text);
+    input.value = "";
+    btn.disabled = true;
+    statusEl.textContent = "sending...";
+
+    try{
+      const r = await fetch(API, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ text })
+      });
+
+      if(!r.ok){
+        const t = await r.text();
+        throw new Error(`HTTP ${r.status}: ${t}`);
+      }
+
+      const data = await r.json();
+
+      // Compatible with different field names
+      const reply = data.reply_text || data.text || data.message || JSON.stringify(data);
+      addMsg("bot", reply);
+
+      // Optional: auto-play audio if your backend returns audio_url
+      // if (data.audio_url) new Audio(data.audio_url).play();
+
+      statusEl.textContent = "ok";
+    }catch(e){
+      addMsg("bot", "(Request failed) " + e.message);
+      statusEl.textContent = "error";
+    }finally{
+      btn.disabled = false;
+      input.focus();
+    }
+  }
+
+  btn.addEventListener("click", send);
+  input.addEventListener("keydown", (e)=>{
+    if(e.key === "Enter" && !e.shiftKey){
+      e.preventDefault();
+      send();
+    }
+  });
+
+  addMsg("bot", "Hi! This is Text Input mode. Type your question and press Send.");
+</script>
+</body>
+</html>
