@@ -301,14 +301,50 @@ def save_state(state):
 
 
 def lan_ip():
+    route_ip = None
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("8.8.8.8", 80))
-        return s.getsockname()[0]
+        route_ip = s.getsockname()[0]
     except OSError:
-        return "127.0.0.1"
+        pass
     finally:
         s.close()
+
+    # The address selected by the default route is normally the interface that
+    # the ESP32 can reach. Prefer it over VMware/WSL/Docker adapter addresses.
+    if route_ip and not route_ip.startswith("127."):
+        return route_ip
+
+    candidates = []
+
+    try:
+        candidates.extend(
+            item[4][0]
+            for item in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)
+        )
+    except OSError:
+        pass
+
+    def priority(value):
+        if value.startswith("192.168."):
+            return 0
+        if value.startswith("10."):
+            return 1
+        if value.startswith("172."):
+            try:
+                second = int(value.split(".")[1])
+                if 16 <= second <= 31:
+                    return 2
+            except (ValueError, IndexError):
+                pass
+        return 9
+
+    usable = sorted(
+        {value for value in candidates if value and not value.startswith("127.")},
+        key=priority,
+    )
+    return usable[0] if usable else "127.0.0.1"
 
 
 def spawn_background(cmd, cwd, log_path, env=None):
@@ -930,14 +966,24 @@ def write_manager_config(config_path, template_path, api_url, secret):
 
 def configure_public_endpoints():
     ip = lan_ip()
+    if ip.startswith("127."):
+        log("no usable LAN IPv4 address was detected; keeping the existing "
+            "WebSocket/OTA addresses", "WARN")
+        return {}, False
+
+    log(f"detected current LAN IPv4: {ip}")
     values = {
         "server.websocket": f"ws://{ip}:{SERVER_PORT}/xiaozhi/v1/",
         "server.ota": f"http://{ip}:{API_PORT}/xiaozhi/ota/",
     }
     updated = True
     for key, value in values.items():
-        if write_manager_param(key, value):
-            log(f"configured {key} -> {value}", "OK")
+        current = read_manager_param(key)
+        if current == value:
+            log(f"{key} already matches current IP -> {value}", "OK")
+        elif write_manager_param(key, value):
+            old_value = current or "not set"
+            log(f"updated {key}: {old_value} -> {value}", "OK")
         else:
             updated = False
     return values, updated

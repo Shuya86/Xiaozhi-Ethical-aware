@@ -56,8 +56,8 @@ if not exist "auto_deploy.py" (
   exit /b 1
 )
 
-echo [1/3] Starting prerequisites, databases, and core services...
-"%PYTHON_EXE%" %PYTHON_ARGS% auto_deploy.py --only prereqs,db,api,web,server --no-install
+echo [1/3] Starting core services and synchronizing the current LAN IP...
+"%PYTHON_EXE%" %PYTHON_ARGS% auto_deploy.py --only prereqs,db,api,web,secret,server --no-install
 if errorlevel 1 goto core_failed
 
 echo.
@@ -114,6 +114,7 @@ echo.
 echo Daily launcher for an already deployed Xiaozhi backend.
 echo It starts Docker Desktop when needed, MySQL, Redis, manager-api,
 echo manager-web, xiaozhi-server, and installed optional services.
+echo It also detects the current LAN IPv4 and updates OTA/WebSocket settings.
 echo --no-pause exits immediately after completion for scripts or testing.
 echo.
 echo Use deploy.bat for the first deployment or dependency installation.

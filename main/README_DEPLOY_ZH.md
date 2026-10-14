@@ -151,9 +151,11 @@ run_xiaozhi-server.bat
 
 1. 检查必需工具，并在需要时启动 Docker Desktop；
 2. 启动 MySQL、Redis、manager-api、manager-web 和 xiaozhi-server；
-3. 如果仓库相邻位置存在 `voiceprint-api` 或 `mcp-endpoint-server`，启动
+3. 自动识别当前局域网 IPv4；如果数据库中的 `server.ota` 或
+   `server.websocket` 仍使用旧 IP，则更新参数并清除对应 Redis 缓存；
+4. 如果仓库相邻位置存在 `voiceprint-api` 或 `mcp-endpoint-server`，启动
    对应可选服务；
-4. 执行最终状态检查并显示管理后台和文本聊天地址。
+5. 执行最终状态检查并显示管理后台和文本聊天地址。
 
 该文件是日常启动器，不安装缺失依赖，也不重新下载模型。首次部署或
 环境缺失时应运行 `deploy.bat`。
@@ -165,7 +167,7 @@ run_xiaozhi-server.bat
 等价的命令行方式是在仓库根目录执行：
 
 ```powershell
-python auto_deploy.py --only prereqs,db,api,web,server --no-install
+python auto_deploy.py --only prereqs,db,api,web,secret,server --no-install
 ```
 
 已经就绪的容器和服务会被安全跳过，不会重复占用端口。也可以再次双击

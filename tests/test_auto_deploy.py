@@ -137,6 +137,39 @@ class AutoDeployTests(unittest.TestCase):
         ):
             deploy.wait_for_port_release(8000, timeout=1)
 
+    def test_public_endpoints_skip_database_write_when_ip_matches(self):
+        expected = {
+            "server.websocket": "ws://192.168.50.249:8000/xiaozhi/v1/",
+            "server.ota": "http://192.168.50.249:8002/xiaozhi/ota/",
+        }
+        with (
+            mock.patch.object(deploy, "lan_ip", return_value="192.168.50.249"),
+            mock.patch.object(
+                deploy,
+                "read_manager_param",
+                side_effect=lambda key: expected[key],
+            ),
+            mock.patch.object(deploy, "write_manager_param") as write_param,
+        ):
+            values, updated = deploy.configure_public_endpoints()
+        self.assertTrue(updated)
+        self.assertEqual(values, expected)
+        write_param.assert_not_called()
+
+    def test_public_endpoints_replace_stale_ip(self):
+        with (
+            mock.patch.object(deploy, "lan_ip", return_value="192.168.50.249"),
+            mock.patch.object(
+                deploy, "read_manager_param", return_value="http://192.168.1.8/"
+            ),
+            mock.patch.object(
+                deploy, "write_manager_param", return_value=True
+            ) as write_param,
+        ):
+            _, updated = deploy.configure_public_endpoints()
+        self.assertTrue(updated)
+        self.assertEqual(write_param.call_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

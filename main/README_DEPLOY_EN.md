@@ -160,9 +160,11 @@ Miniconda, `py`, or `python`, then:
 
 1. checks required tools and starts Docker Desktop when necessary;
 2. starts MySQL, Redis, manager-api, manager-web, and xiaozhi-server;
-3. starts `voiceprint-api` and `mcp-endpoint-server` when their sibling
+3. detects the current LAN IPv4 and updates stale `server.ota` and
+   `server.websocket` database values, invalidating their Redis cache entries;
+4. starts `voiceprint-api` and `mcp-endpoint-server` when their sibling
    repositories are installed;
-4. performs a final status check and prints the console and text-chat URLs.
+5. performs a final status check and prints the console and text-chat URLs.
 
 This is a daily launcher. It does not install missing dependencies or download
 the model again. Use `deploy.bat` if first-time deployment is incomplete.
@@ -174,7 +176,7 @@ launcher returns its exit code without waiting for a key. Run
 The equivalent command-line startup from the repository root is:
 
 ```powershell
-python auto_deploy.py --only prereqs,db,api,web,server --no-install
+python auto_deploy.py --only prereqs,db,api,web,secret,server --no-install
 ```
 
 Ready containers and services are safely skipped instead of being started on

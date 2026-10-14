@@ -73,8 +73,11 @@ python auto_deploy.py --stop
 After the first complete deployment succeeds, Windows users can double-click
 `run_xiaozhi-server.bat` in the repository root. It uses the same deployment
 engine to start Docker, the databases, all three core applications, and any
-installed optional modules, then runs a final status check. This launcher does
-not install missing tools; use `deploy.bat` when the environment is incomplete.
+installed optional modules. On every start it detects the current LAN IPv4. It
+updates the database and invalidates the corresponding Redis cache only when
+`server.ota` or `server.websocket` contains a stale IP, then runs a final
+status check. This launcher does not install missing tools; use `deploy.bat`
+when the environment is incomplete.
 
 Voiceprint and MCP endpoint services are optional separate repositories. If
 their sibling directories already exist, start them with:
