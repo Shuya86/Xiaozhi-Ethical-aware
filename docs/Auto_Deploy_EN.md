@@ -12,6 +12,11 @@ directory.
 Double-click `deploy.bat` in the repository root. Keep the eight default
 stages selected and click **Start**.
 
+The window selects an initial size that fits the screen. The bottom **Process
+Log** keeps a readable minimum height and has horizontal and vertical
+scrollbars. Drag the divider between the controls and log to resize it; extra
+window height is assigned to the log so complete process output stays visible.
+
 The first run may install or download Docker, JDK 21, Maven, Node.js,
 Miniconda, Python dependencies, and the SenseVoiceSmall model. If an installer
 changes `PATH`, close the deployment window and open `deploy.bat` again.

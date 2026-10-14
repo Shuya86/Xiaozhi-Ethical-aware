@@ -73,8 +73,13 @@ class DeployApp:
     def __init__(self, root):
         self.root = root
         root.title("xiaozhi-esp32-server - Auto Deploy")
-        root.geometry("880x640")
-        root.minsize(700, 500)
+        # Fit common laptop screens while giving the process log enough room.
+        screen_w = root.winfo_screenwidth()
+        screen_h = root.winfo_screenheight()
+        width = min(1100, max(800, screen_w - 80))
+        height = min(820, max(600, screen_h - 100))
+        root.geometry(f"{width}x{height}")
+        root.minsize(min(820, width), min(600, height))
 
         self.log_queue = queue.Queue()
         self.progress_queue = queue.Queue()
@@ -101,8 +106,21 @@ class DeployApp:
 
     # -- layout -----------------------------------------------------------
     def _build_widgets(self):
-        top = ttk.Frame(self.root, padding=8)
-        top.pack(fill="x")
+        # A movable sash lets users trade control-panel space for log space.
+        # The log pane has a minimum height and receives all extra height.
+        self.main_pane = tk.PanedWindow(
+            self.root,
+            orient="vertical",
+            sashrelief="raised",
+            sashwidth=7,
+            bd=0,
+            opaqueresize=True,
+        )
+        self.main_pane.pack(fill="both", expand=True)
+
+        top = ttk.Frame(self.main_pane, padding=8)
+        self.main_pane.add(top, minsize=300, stretch="never")
+        self.top_panel = top
 
         left = ttk.LabelFrame(top, text="Stages", padding=8)
         left.pack(side="left", fill="y")
@@ -119,30 +137,40 @@ class DeployApp:
 
         check_frame = ttk.Frame(left)
         check_frame.pack(fill="x", pady=(8, 0))
-        for name in ad.STAGES:
+        for index, name in enumerate(ad.STAGES):
             ttk.Checkbutton(check_frame, text=f"run {name}", variable=self.stage_vars[name]
-                             ).pack(anchor="w")
-        ttk.Separator(check_frame, orient="horizontal").pack(fill="x", pady=4)
-        ttk.Label(check_frame, text="optional add-ons:").pack(anchor="w")
-        for name in ad.OPTIONAL_STAGES:
+                             ).grid(row=index // 2, column=index % 2,
+                                    sticky="w", padx=(0, 12))
+        option_row = (len(ad.STAGES) + 1) // 2
+        ttk.Separator(check_frame, orient="horizontal").grid(
+            row=option_row, column=0, columnspan=2, sticky="ew", pady=4
+        )
+        ttk.Label(check_frame, text="optional add-ons:").grid(
+            row=option_row + 1, column=0, columnspan=2, sticky="w"
+        )
+        for index, name in enumerate(ad.OPTIONAL_STAGES):
             ttk.Checkbutton(check_frame, text=f"run {name}", variable=self.stage_vars[name]
-                             ).pack(anchor="w")
+                             ).grid(row=option_row + 2, column=index,
+                                    sticky="w", padx=(0, 12))
 
         right = ttk.Frame(top, padding=(12, 0, 0, 0))
         right.pack(side="left", fill="both", expand=True)
 
         opts = ttk.LabelFrame(right, text="Options", padding=8)
         opts.pack(fill="x")
-        ttk.Checkbutton(opts, text="Auto-confirm installs (--yes)",
-                         variable=self.auto_yes_var).pack(anchor="w")
-        ttk.Checkbutton(opts, text="Check only; never install missing tools (--no-install)",
-                         variable=self.no_install_var).pack(anchor="w")
-        ttk.Checkbutton(opts, text="Skip China mirror config (--no-mirror)",
-                         variable=self.no_mirror_var).pack(anchor="w")
-        ttk.Checkbutton(opts, text="Redo secret/config step (--reconfigure)",
-                         variable=self.reconfigure_var).pack(anchor="w")
-        ttk.Checkbutton(opts, text="Restart selected running services (--restart)",
-                         variable=self.restart_var).pack(anchor="w")
+        option_widgets = [
+            ("Auto-confirm installs (--yes)", self.auto_yes_var),
+            ("Check only; never install missing tools (--no-install)", self.no_install_var),
+            ("Skip China mirror config (--no-mirror)", self.no_mirror_var),
+            ("Redo secret/config step (--reconfigure)", self.reconfigure_var),
+            ("Restart selected running services (--restart)", self.restart_var),
+        ]
+        for index, (label, variable) in enumerate(option_widgets):
+            ttk.Checkbutton(opts, text=label, variable=variable).grid(
+                row=index // 2, column=index % 2, sticky="w", padx=(0, 18)
+            )
+        opts.columnconfigure(0, weight=1)
+        opts.columnconfigure(1, weight=1)
 
         btns = ttk.Frame(right, padding=(0, 8))
         btns.pack(fill="x")
@@ -173,16 +201,66 @@ class DeployApp:
 
         status_frame = ttk.LabelFrame(right, text="Live status", padding=8)
         status_frame.pack(fill="x", pady=(8, 0))
-        self.status_text = tk.StringVar(value="(not refreshed yet)")
-        ttk.Label(status_frame, textvariable=self.status_text, justify="left").pack(anchor="w")
+        status_frame.columnconfigure(0, weight=1)
+        status_frame.rowconfigure(0, weight=1)
+        self.status_box = tk.Text(
+            status_frame,
+            height=9,
+            wrap="none",
+            state="disabled",
+            font=("Consolas", 9),
+            relief="flat",
+            background=self.root.cget("background"),
+        )
+        status_scroll = ttk.Scrollbar(
+            status_frame, orient="vertical", command=self.status_box.yview
+        )
+        self.status_box.configure(yscrollcommand=status_scroll.set)
+        self.status_box.grid(row=0, column=0, sticky="nsew")
+        status_scroll.grid(row=0, column=1, sticky="ns")
+        self._set_status_text("(not refreshed yet)")
 
-        log_frame = ttk.LabelFrame(self.root, text="Log", padding=8)
-        log_frame.pack(fill="both", expand=True, padx=8, pady=(0, 8))
-        self.log_text = tk.Text(log_frame, wrap="word", state="disabled", height=16)
-        scrollbar = ttk.Scrollbar(log_frame, command=self.log_text.yview)
-        self.log_text.configure(yscrollcommand=scrollbar.set)
-        self.log_text.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        log_frame = ttk.LabelFrame(self.main_pane, text="Process Log", padding=8)
+        self.main_pane.add(log_frame, minsize=240, stretch="always")
+        log_frame.columnconfigure(0, weight=1)
+        log_frame.rowconfigure(0, weight=1)
+        self.log_text = tk.Text(
+            log_frame,
+            wrap="none",
+            state="disabled",
+            height=18,
+            font=("Consolas", 10),
+        )
+        log_y_scroll = ttk.Scrollbar(
+            log_frame, orient="vertical", command=self.log_text.yview
+        )
+        log_x_scroll = ttk.Scrollbar(
+            log_frame, orient="horizontal", command=self.log_text.xview
+        )
+        self.log_text.configure(
+            yscrollcommand=log_y_scroll.set,
+            xscrollcommand=log_x_scroll.set,
+        )
+        self.log_text.grid(row=0, column=0, sticky="nsew")
+        log_y_scroll.grid(row=0, column=1, sticky="ns")
+        log_x_scroll.grid(row=1, column=0, sticky="ew")
+        self.root.after_idle(self._position_initial_sash)
+
+    def _position_initial_sash(self):
+        """Keep controls visible but reserve a useful initial log viewport."""
+        try:
+            total_height = self.main_pane.winfo_height()
+            requested_top = self.top_panel.winfo_reqheight()
+            top_height = min(max(300, requested_top), max(300, total_height - 260))
+            self.main_pane.sash_place(0, 0, top_height)
+        except tk.TclError:
+            pass
+
+    def _set_status_text(self, text):
+        self.status_box.configure(state="normal")
+        self.status_box.delete("1.0", "end")
+        self.status_box.insert("1.0", text)
+        self.status_box.configure(state="disabled")
 
     # -- worker-thread -> main-thread bridges ------------------------------
     def ask_on_main(self, fn):
@@ -352,7 +430,7 @@ class DeployApp:
             lines.append(f"api     : http://{s['ip']}:{ad.API_PORT}/xiaozhi")
             lines.append(f"ws      : ws://{s['ip']}:{ad.SERVER_PORT}/xiaozhi/v1/")
             text = "\n".join(lines)
-            self.root.after(0, lambda: self.status_text.set(text))
+            self.root.after(0, lambda: self._set_status_text(text))
 
         threading.Thread(target=work, daemon=True).start()
 
