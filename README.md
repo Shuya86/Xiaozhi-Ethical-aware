@@ -176,6 +176,8 @@ Spearheaded by Professor Siyuan Liu's Team (South China University of Technology
 
 ## 部署文档
 
+本分支提供了适用于 Windows、Linux 和 macOS 的本地源码全模块部署工具。Windows 首次部署可直接双击 `deploy.bat`，首次部署完成后的日常启动可双击 `run_xiaozhi-server.bat`。整个系统的安装、日常启动及硬件上线顺序见[完整中文指南](./main/README_DEPLOY_ZH.md)或[Complete English Guide](./main/README_DEPLOY_EN.md)；部署器参数见[一键部署中文文档](./docs/Auto_Deploy.md)或[English guide](./docs/Auto_Deploy_EN.md)。网页文本聊天另有[中文说明](./main/xiaozhi-server/core/web/README_ZH.md)和[English guide](./main/xiaozhi-server/core/web/README_EN.md)。该流程会保留本分支的文本聊天和伦理提示词改动，不会覆盖源码。
+
 ![Banners](docs/images/banner2.png)
 
 本项目提供两种部署方式，请根据您的具体需求选择：

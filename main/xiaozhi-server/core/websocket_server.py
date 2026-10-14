@@ -33,6 +33,24 @@ class WebSocketServer:
         self._intent = modules["intent"] if "intent" in modules else None
         self._memory = modules["memory"] if "memory" in modules else None
 
+        # Latest per-device config — refreshed each time an ESP32 connects.
+        # Web connections read LLM + prompt from here (safe to share: stateless).
+        # Memory/intent instances are NOT shared: they have mutable per-connection
+        # state and are not thread-safe to use across simultaneous connections.
+        self.cached_device_prompt = None
+        self.cached_device_selected_modules = {}
+
+        # Half-duplex mode gate.
+        # True  → text mode active: web text input is live, ESP32 mic is paused.
+        # False → voice mode active (default): ESP32 mic is live, web text is standby.
+        # Controlled by {"type":"web_mode","mode":"text"|"voice"} WebSocket messages.
+        # Always reset to False when the web client disconnects.
+        self.text_mode_active = False
+
+        # Track every live ConnectionHandler so update_config() can push
+        # a new LLM to all active connections immediately after admin changes.
+        self._active_handlers = set()
+
         auth_config = self.config["server"].get("auth", {})
         self.auth_enable = auth_config.get("enabled", False)
         # 设备白名单
@@ -47,7 +65,10 @@ class WebSocketServer:
         port = int(server_config.get("port", 8000))
 
         async with websockets.serve(
-            self._handle_connection, host, port, process_request=self._http_response
+            self._handle_connection, host, port,
+            process_request=self._http_response,
+            ping_interval=20,   # server sends a WS-protocol ping every 20 s
+            ping_timeout=10,    # close if no pong within 10 s (stale connection)
         ):
             await asyncio.Future()
 
@@ -96,11 +117,13 @@ class WebSocketServer:
             self._intent,
             self,  # 传入server实例
         )
+        self._active_handlers.add(handler)
         try:
             await handler.handle_connection(websocket)
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"处理连接时出错: {e}")
         finally:
+            self._active_handlers.discard(handler)
             # 强制关闭连接（如果还没有关闭的话）
             try:
                 # 安全地检查WebSocket状态并关闭
@@ -159,17 +182,51 @@ class WebSocketServer:
                     "Intent" in new_config["selected_module"],
                 )
 
-                # 更新组件实例
-                if "vad" in modules:
-                    self._vad = modules["vad"]
-                if "asr" in modules:
-                    self._asr = modules["asr"]
-                if "llm" in modules:
-                    self._llm = modules["llm"]
-                if "intent" in modules:
-                    self._intent = modules["intent"]
-                if "memory" in modules:
-                    self._memory = modules["memory"]
+                # ── Update server-level module references ────────────────
+                if "vad"    in modules: self._vad    = modules["vad"]
+                if "asr"    in modules: self._asr    = modules["asr"]
+                if "llm"    in modules: self._llm    = modules["llm"]
+                if "intent" in modules: self._intent = modules["intent"]
+                if "memory" in modules: self._memory = modules["memory"]
+
+                # ── Push every updated module to all live connections ────
+                # Derive the new intent pipeline type from the new config so
+                # active connections use the right intent handler immediately.
+                sel_intent = new_config.get("selected_module", {}).get("Intent", "")
+                new_intent_type = (
+                    new_config.get("Intent", {})
+                    .get(sel_intent, {})
+                    .get("type", "nointent")
+                ) if sel_intent else "nointent"
+
+                pushed = []
+                for h in list(self._active_handlers):
+                    try:
+                        if "llm"    in modules and self._llm    is not None:
+                            h.llm    = self._llm;    pushed.append("llm")
+                        if "intent" in modules and self._intent is not None:
+                            h.intent = self._intent; h.intent_type = new_intent_type
+                            pushed.append("intent")
+                        if "memory" in modules and self._memory is not None:
+                            h.memory = self._memory; pushed.append("memory")
+                        if "vad"    in modules and self._vad    is not None:
+                            h._vad   = self._vad
+                            if h.vad is not None: h.vad = self._vad
+                            pushed.append("vad")
+                        if "asr"    in modules and self._asr    is not None:
+                            # Update the shared reference; the live per-connection
+                            # ASR keeps running — new type takes effect on reconnect.
+                            h._asr = self._asr;  pushed.append("asr")
+                    except Exception as push_err:
+                        self.logger.bind(tag=TAG).warning(
+                            f"Config push to handler failed: {push_err}"
+                        )
+
+                if pushed:
+                    self.logger.bind(tag=TAG).info(
+                        f"Config pushed {list(set(pushed))} to "
+                        f"{len(self._active_handlers)} active connection(s)"
+                    )
                 self.logger.bind(tag=TAG).info(f"更新配置任务执行完毕")
                 return True
         except Exception as e:

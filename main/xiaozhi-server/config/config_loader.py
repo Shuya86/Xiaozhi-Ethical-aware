@@ -71,6 +71,16 @@ def get_config_from_api(config):
     # 如果服务器没有prompt_template，则从本地配置读取
     if not config_data.get("prompt_template"):
         config_data["prompt_template"] = config.get("prompt_template")
+
+    # Log configuration (format, level, paths) is always local — the API
+    # never manages logging settings, so read from config.yaml directly.
+    try:
+        default_cfg = read_config(get_project_dir() + "config.yaml")
+        if default_cfg.get("log"):
+            config_data["log"] = default_cfg["log"]
+    except Exception:
+        pass
+
     return config_data
 
 

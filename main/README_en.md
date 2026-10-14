@@ -1,5 +1,9 @@
 # Technical Documentation: `xiaozhi-esp32-server`
 
+For complete installation, startup, shutdown, and hardware connection steps,
+see the [System Deployment and Startup Guide](./README_DEPLOY_EN.md). A
+[Chinese version](./README_DEPLOY_ZH.md) is also available.
+
 **Table of Contents:**
 
 1.  [Introduction](#1-introduction)

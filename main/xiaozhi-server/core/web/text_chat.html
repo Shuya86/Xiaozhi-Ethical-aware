@@ -1,118 +1,818 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Xiaozhi Text Chat</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Sheldon Chat</title>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
-      margin:0;background:#f5f7fb;}
-    .wrap{max-width:900px;margin:24px auto;padding:16px;}
-    .card{background:#fff;border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.06);
-      overflow:hidden;}
-    .head{padding:14px 16px;border-bottom:1px solid #eee;font-weight:700;}
-    .msgs{height:62vh;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px;}
-    .row{display:flex;}
-    .me{justify-content:flex-end;}
-    .bot{justify-content:flex-start;}
-    .bubble{max-width:75%;padding:10px 12px;border-radius:14px;line-height:1.45;
-      white-space:pre-wrap;word-break:break-word;}
-    .me .bubble{background:#1a73e8;color:#fff;border-bottom-right-radius:4px;}
-    .bot .bubble{background:#f0f2f5;color:#111;border-bottom-left-radius:4px;}
-    .foot{display:flex;gap:10px;padding:12px;border-top:1px solid #eee;align-items:center;}
-    input{flex:1;border:1px solid #ddd;border-radius:12px;padding:12px 12px;font-size:16px;outline:none;}
-    button{border:none;border-radius:12px;padding:12px 14px;font-size:16px;cursor:pointer;}
-    button.send{background:#1a73e8;color:#fff;}
-    button.send:disabled{opacity:.6;cursor:not-allowed;}
-    .hint{padding:0 16px 12px;color:#666;font-size:13px;}
-    .small{font-size:12px;color:#777;margin-left:auto}
+    /* ── CSS Variables (Gemini Inspired Theme) ── */
+    :root {
+      --bg-body: #ffffff;
+      --bg-header: rgba(255, 255, 255, 0.85);
+      --text-main: #1f1f1f;
+      --text-muted: #444746;
+      --border-color: rgba(0, 0, 0, 0.08);
+      
+      --primary: #1a73e8; /* Gemini Blue */
+      --primary-hover: #1557b0;
+      
+      --bot-bg: transparent;
+      --bot-text: #1f1f1f;
+      
+      --me-bg: #f0f4f9;
+      --me-text: #1f1f1f;
+      
+      --input-bg: #f0f4f9;
+      --input-border: transparent;
+      --input-shadow: none;
+      
+      --voice-overlay-bg: rgba(240, 244, 249, 0.9);
+      --voice-overlay-text: #1a73e8;
+      
+      --panel-bg: #ffffff;
+    }
+
+    [data-theme="dark"] {
+      --bg-body: #131314;
+      --bg-header: rgba(19, 19, 20, 0.85);
+      --text-main: #e3e3e3;
+      --text-muted: #c4c7c5;
+      --border-color: rgba(255, 255, 255, 0.08);
+      
+      --primary: #a8c7fa; 
+      --primary-hover: #d3e3fd;
+      
+      --bot-bg: transparent;
+      --bot-text: #e3e3e3;
+      
+      --me-bg: #1e1f20;
+      --me-text: #e3e3e3;
+      
+      --input-bg: #1e1f20;
+      --input-border: transparent;
+      --input-shadow: none;
+      
+      --voice-overlay-bg: rgba(30, 31, 32, 0.9);
+      --voice-overlay-text: #a8c7fa;
+      
+      --panel-bg: #1e1f20;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Google Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-body); color: var(--text-main);
+      height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+
+    /* ── Floating Header (Gemini Style) ── */
+    .hd {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      padding: 14px 24px; position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: var(--bg-header); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    /* 修改这里：移除了 flex: 1，让它只占自身需要的空间 */
+    .hd-title { font-weight: 500; font-size: 18px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
+    
+    /* 新增：状态指示器容器 */
+    .status-indicator { display: flex; align-items: center; gap: 6px; }
+
+    .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; transition: all .3s; }
+    .conn-dot.ok { background: #12b76a; box-shadow: 0 0 8px rgba(18,183,106,0.4); }
+    .conn-dot.err { background: #f04438; box-shadow: 0 0 8px rgba(240,68,56,0.4); }
+    .conn-dot.busy { background: #f79009; box-shadow: 0 0 8px rgba(247,144,9,0.4); }
+    #conn-label { font-size: 13px; color: var(--text-muted); min-width: 70px; }
+    
+    .hd-controls { display: flex; gap: 8px; align-items: center; }
+    select.lang-select, button.theme-btn, .hd-btn {
+      background: transparent; border: 1px solid var(--border-color);
+      color: var(--text-main); border-radius: 20px; padding: 6px 14px;
+      font-size: 13px; font-weight: 500; cursor: pointer; outline: none; transition: all 0.2s;
+    }
+    select.lang-select:hover, button.theme-btn:hover, .hd-btn:hover { background: var(--me-bg); border-color: transparent; }
+
+    /* Mode Button */
+    .mode-btn {
+      border: 1px solid var(--border-color); border-radius: 20px; padding: 6px 14px; font-size: 13px;
+      cursor: pointer; transition: all .2s; font-weight: 500;
+    }
+    .mode-btn.voice { background: var(--primary); color: var(--bg-body); border-color: transparent; }
+    .mode-btn.voice:hover { background: var(--primary-hover); }
+    .mode-btn.text { background: transparent; color: var(--text-main); }
+    .mode-btn.text:hover { background: var(--me-bg); border-color: transparent; }
+
+    /* ── Config Panel (Dropdown from header) ── */
+    #cfg-panel { 
+      position: fixed; top: 60px; left: 0; right: 0; z-index: 99;
+      border-bottom: 1px solid var(--border-color); background: var(--panel-bg); 
+      padding: 20px 24px; box-shadow: 0 10px 20px rgba(0,0,0,0.05); display: none; 
+    }
+    #cfg-panel.open { display: block; animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+    .cfg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; max-width: 860px; margin: 0 auto; }
+    .cfg-item { display: flex; flex-direction: column; gap: 4px; }
+    .cfg-label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; }
+    .cfg-val { font-size: 14px; color: var(--text-main); font-weight: 500; }
+    .cfg-link { margin-top: 16px; display: inline-block; font-size: 13px; color: var(--primary); text-decoration: none; font-weight: 500; text-align: center; width: 100%; }
+
+    /* ── Messages Area ── */
+    .msgs-container { 
+      flex: 1; overflow-y: auto; scroll-behavior: smooth; 
+      padding-top: 70px; padding-bottom: 160px;
+    }
+    .msgs { width: 100%; max-width: 860px; margin: 0 auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 32px; }
+    
+    .msgs-container::-webkit-scrollbar { width: 6px; }
+    .msgs-container::-webkit-scrollbar-thumb { background: transparent; border-radius: 99px; }
+    .msgs-container:hover::-webkit-scrollbar-thumb { background: var(--border-color); }
+
+    /* ── Chat Bubbles (Gemini Style) ── */
+    .row { display: flex; gap: 16px; opacity: 0; animation: messageFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    @keyframes messageFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    
+    .row.bot { flex-direction: row; align-items: flex-start; }
+    .avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 20px; user-select: none; }
+    .row.bot .msg-content { flex: 1; max-width: 90%; }
+    .row.bot .bubble { background: transparent; color: var(--bot-text); font-size: 16px; line-height: 1.6; word-break: break-word; white-space: pre-wrap; padding-top: 6px; }
+    
+    .row.me { flex-direction: row-reverse; }
+    .row.me .msg-content { max-width: 80%; }
+    .row.me .bubble { background: var(--me-bg); color: var(--me-text); font-size: 16px; line-height: 1.6; padding: 12px 20px; border-radius: 24px; word-break: break-word; white-space: pre-wrap; border-top-right-radius: 6px; }
+    
+    .bubble.typing::after { content: '✨'; display: inline-block; animation: sparkle 1.5s infinite; margin-left: 6px; font-size: 14px; }
+    @keyframes sparkle { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.1); } }
+    .ts { font-size: 11px; color: var(--text-muted); margin-top: 8px; text-align: right; opacity: 0; transition: opacity 0.2s; }
+    .row:hover .ts { opacity: 1; }
+    /* Markdown rendering inside bot bubbles */
+    .row.bot .bubble strong { font-weight: 700; }
+    .row.bot .bubble em     { font-style: italic; }
+    .row.bot .bubble code   {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 0.88em; background: rgba(0,0,0,0.06);
+      padding: 1px 5px; border-radius: 4px;
+    }
+    [data-theme="dark"] .row.bot .bubble code { background: rgba(255,255,255,0.1); }
+
+    .latency-badge {
+      font-size: 10px; color: var(--text-muted); font-family: monospace;
+      margin-top: 4px; opacity: 0; transition: opacity 0.2s;
+      letter-spacing: 0.02em;
+    }
+    .row:hover .latency-badge { opacity: 1; }
+
+    /* ── Empty State ── */
+    .empty { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; flex: 1; color: var(--text-main); font-size: 24px; pointer-events: none; height: 100%; min-height: 40vh; font-weight: 500; letter-spacing: -0.02em; }
+    .empty-logo { font-size: 56px; margin-bottom: 8px; animation: float 6s ease-in-out infinite; }
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+    /* ── Floating Input Footer (Gemini Style) ── */
+    .ft-wrapper { 
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+      display: flex; flex-direction: column; align-items: center; padding: 0 24px 32px; 
+      background: linear-gradient(to top, var(--bg-body) 60%, transparent); 
+      pointer-events: none; 
+    }
+    
+    .input-container { 
+      pointer-events: auto; 
+      position: relative; width: 100%; max-width: 820px; 
+      background: var(--input-bg); border-radius: 32px; 
+      border: 1px solid var(--input-border); box-shadow: var(--input-shadow); 
+      transition: background 0.3s, box-shadow 0.3s; display: flex; flex-direction: column; 
+    }
+    .input-container:focus-within { background: var(--bg-body); box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid var(--border-color); }
+    [data-theme="dark"] .input-container:focus-within { background: #282a2c; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+
+    textarea { 
+      width: 100%; border: none; padding: 18px 120px 18px 24px; 
+      font-size: 16px; font-family: inherit; background: transparent; 
+      color: var(--text-main); outline: none; resize: none; max-height: 200px; 
+      overflow-y: auto; line-height: 1.5; 
+    }
+    textarea::placeholder { color: var(--text-muted); opacity: 0.8; }
+    textarea:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .action-btns { position: absolute; right: 12px; bottom: 10px; display: flex; gap: 8px; }
+    .icon-btn { 
+      width: 40px; height: 40px; border-radius: 50%; border: none; 
+      display: flex; align-items: center; justify-content: center; font-size: 20px; 
+      cursor: pointer; transition: all .2s; flex-shrink: 0; background: transparent; color: var(--text-main); 
+    }
+    .icon-btn:hover:not(:disabled) { background: rgba(0,0,0,0.05); }
+    [data-theme="dark"] .icon-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
+    .icon-btn:disabled { opacity: .3; cursor: not-allowed; }
+    
+    #mic-btn.recording { color: #f04438; animation: micPulse 1.5s infinite; background: rgba(240,68,56,0.1); }
+    @keyframes micPulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+    
+    #send-btn { background: transparent; color: var(--text-main); }
+    #send-btn.active { background: var(--text-main); color: var(--bg-body); }
+    #send-btn.active:hover { opacity: 0.8; transform: translateY(-1px); }
+    #send-btn svg { width: 20px; height: 20px; fill: currentColor; }
+
+    /* ── Voice Overlay (Inside Input Box) ── */
+    #voice-overlay { 
+      position: absolute; inset: 0; background: var(--voice-overlay-bg); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      display: none; align-items: center; justify-content: center; gap: 12px; 
+      color: var(--voice-overlay-text); font-size: 15px; font-weight: 500; 
+      z-index: 10; border-radius: 32px; opacity: 0; transition: opacity 0.3s ease; 
+    }
+    #voice-overlay.show { display: flex; opacity: 1; }
+    .voice-indicator { width: 10px; height: 10px; background: currentColor; border-radius: 50%; animation: pulse-ring 1.5s infinite; }
+    @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(26,115,232,0.4); } 70% { box-shadow: 0 0 0 12px rgba(26,115,232,0); } 100% { box-shadow: 0 0 0 0 rgba(26,115,232,0); } }
+
+    /* ── Sub Status Bar (Under Input Box) ── */
+    .sub-status { margin-top: 12px; font-size: 12px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; max-width: 820px; pointer-events: auto; font-weight: 400; }
+    #esp32-badge { background: transparent; border: 1px solid currentColor; color: #f79009; padding: 2px 8px; border-radius: 12px; font-weight: 500; font-size: 11px; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <div class="head">Xiaozhi · Text Input</div>
-      <div class="hint">
-        Type your message here → it will be sent to the backend <b>/text</b> API → the reply will show below.
-        <span class="small" id="status">ready</span>
-      </div>
-      <div class="msgs" id="msgs"></div>
-      <div class="foot">
-        <input id="input" placeholder="Type a message... (Enter to send, Shift+Enter for newline)" />
-        <button class="send" id="btn">Send</button>
+
+  <!-- Floating Header -->
+  <div class="hd">
+    <div class="hd-title" id="ui-title">✨ Sheldon</div>
+    
+    <!-- 这里是将状态指示器打包在一个容器里，让它紧挨着标题 -->
+    <div class="status-indicator">
+      <div class="conn-dot" id="conn-dot"></div>
+      <span id="conn-label">Connecting…</span>
+    </div>
+    
+    <!-- 弹簧空间，把右侧按钮推到最右边 -->
+    <div style="flex:1"></div> 
+
+    <div class="hd-controls">
+      <button class="theme-btn" id="theme-btn" title="Toggle Light/Dark Mode">🌙</button>
+      <select class="lang-select" id="lang-select">
+        <option value="zh">中文</option>
+        <option value="en" selected>English</option>
+        <option value="ms">Melayu</option>
+      </select>
+      <button id="mode-btn" class="mode-btn voice" disabled>🎤 Voice</button>
+      <button class="hd-btn" id="cfg-toggle">⚙ Settings</button>
+      <button class="hd-btn" id="clear-btn">Clear</button>
+    </div>
+  </div>
+
+  <!-- Dropdown Config Panel -->
+  <div id="cfg-panel">
+    <div style="margin-bottom: 16px; text-align: center; color: var(--text-muted); font-size: 12px;" id="cfg-mode"></div>
+    <div class="cfg-grid" id="cfg-grid"></div>
+    <div style="text-align: center; margin-top: 16px;">
+      <a class="cfg-link" id="cfg-admin-link" href="#" target="_blank" style="display:none">Open Manager Admin Panel ↗</a>
+    </div>
+  </div>
+
+  <!-- Scrollable Messages Area -->
+  <div class="msgs-container">
+    <div class="msgs" id="msgs">
+      <div class="empty" id="empty">
+        <div class="empty-logo">✨</div>
+        <span id="empty-text">Hello, I'm Sheldon</span>
       </div>
     </div>
   </div>
 
+  <!-- Floating Footer & Input Box -->
+  <div class="ft-wrapper">
+    <div class="input-container">
+      
+      <!-- Voice Mode Overlay -->
+      <div id="voice-overlay">
+        <div class="voice-indicator"></div>
+        <span id="voice-overlay-text">ESP32 Listening... Switch to text to type.</span>
+      </div>
+      
+      <textarea id="input" rows="1" placeholder="Ask Xiaotong..." disabled></textarea>
+      
+      <div class="action-btns">
+        <button class="icon-btn" id="mic-btn" title="Speak" disabled>🎤</button>
+        <button class="icon-btn" id="send-btn" disabled>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 20V4l19 8-19 8zm2-3l11.85-5L5 7v3.5l6 1.5-6 1.5V17z"/></svg>
+        </button>
+      </div>
+    </div>
+    
+    <div class="sub-status">
+      <span id="status-text">Connecting...</span>
+      <span id="esp32-badge" style="display:none;">ESP32 Active</span>
+    </div>
+  </div>
+
 <script>
-  // Backend text endpoint (same-origin by default)
-  const API = "/text";
+// ─────────────────────────────────────────────
+//  i18n (Language dictionaries)
+// ─────────────────────────────────────────────
+const i18n = {
+  en: {
+    title: "✨ Sheldon", btn_clear: "Clear", btn_config: "⚙ Settings",
+    mode_voice: "🎤 Voice", mode_text: "💬 Text",
+    empty_text: "Hello, I'm Sheldon", empty_voice: "Switch to Text Mode to start typing",
+    placeholder: "Ask Sheldon...",
+    voice_overlay: "ESP32 Listening... Switch to Text to type.",
+    esp32_badge: "ESP32 Active", alert_clear: "Clear all conversation history?",
+    alert_timeout: "Response timed out.", time_waiting: "Thinking...", time_responding: "Typing...", time_sending: "Sending...",
+    hint_disconnected: "Disconnected.", hint_idle: "Ready to help.", hint_recording: "Listening...",
+    state: { disconnected: "Offline", idle: "Online", recording: "Listening...", sending: "Sending...", thinking: "Thinking...", responding: "Typing..." }
+  },
+  zh: {
+    title: "✨ 谢尔顿", btn_clear: "清空", btn_config: "⚙ 设置",
+    mode_voice: "🎤 语音", mode_text: "💬 文本",
+    empty_text: "你好，我是谢尔顿", empty_voice: "请切换到文本模式开始输入",
+    placeholder: "给谢尔顿发送消息...",
+    voice_overlay: "ESP32 正在聆听... 切换到文本模式进行输入",
+    esp32_badge: "ESP32 待命", alert_clear: "确认清空所有对话记录？",
+    alert_timeout: "响应超时", time_waiting: "思考中...", time_responding: "正在回复...", time_sending: "发送中...",
+    hint_disconnected: "已断开连接", hint_idle: "随时准备帮忙", hint_recording: "正在聆听...",
+    state: { disconnected: "离线", idle: "在线", recording: "聆听中...", sending: "发送中...", thinking: "思考中...", responding: "回复中..." }
+  },
+  ms: {
+    title: "✨ Sheldon", btn_clear: "Padam", btn_config: "⚙ Tetapan",
+    mode_voice: "🎤 Suara", mode_text: "💬 Teks",
+    empty_text: "Hello, Saya Sheldon", empty_voice: "Tukar ke Mod Teks untuk menaip",
+    placeholder: "Tanya Sheldon...",
+    voice_overlay: "ESP32 Mendengar... Tukar ke Teks untuk menaip.",
+    esp32_badge: "ESP32 Aktif", alert_clear: "Padam semua sejarah?",
+    alert_timeout: "Maklum balas tamat masa.", time_waiting: "Berfikir...", time_responding: "Menaip...", time_sending: "Menghantar...",
+    hint_disconnected: "Terputus.", hint_idle: "Sedia membantu.", hint_recording: "Mendengar...",
+    state: { disconnected: "Luar Talian", idle: "Dalam Talian", recording: "Mendengar...", sending: "Menghantar...", thinking: "Berfikir...", responding: "Menaip..." }
+  }
+};
 
-  const msgs = document.getElementById("msgs");
-  const input = document.getElementById("input");
-  const btn = document.getElementById("btn");
-  const statusEl = document.getElementById("status");
+let currentLang = localStorage.getItem("xz_lang") || "en";
+const t = (key) => i18n[currentLang][key];
 
-  function addMsg(role, text){
-    const row = document.createElement("div");
-    row.className = "row " + (role === "me" ? "me" : "bot");
-    const bubble = document.createElement("div");
-    bubble.className = "bubble";
-    bubble.textContent = text;
-    row.appendChild(bubble);
-    msgs.appendChild(row);
-    msgs.scrollTop = msgs.scrollHeight;
+// ─────────────────────────────────────────────
+//  DOM refs
+// ─────────────────────────────────────────────
+const msgsEl     = document.getElementById("msgs");
+const msgsContainer = document.querySelector(".msgs-container");
+const inputEl    = document.getElementById("input");
+const sendBtn    = document.getElementById("send-btn");
+const micBtn     = document.getElementById("mic-btn");
+const statusEl   = document.getElementById("status-text");
+const emptyEl    = document.getElementById("empty");
+const emptyText  = document.getElementById("empty-text");
+const connDot    = document.getElementById("conn-dot");
+const connLabel  = document.getElementById("conn-label");
+const cfgToggle  = document.getElementById("cfg-toggle");
+const cfgPanel   = document.getElementById("cfg-panel");
+const cfgGrid    = document.getElementById("cfg-grid");
+const cfgMode    = document.getElementById("cfg-mode");
+const cfgAdminLk = document.getElementById("cfg-admin-link");
+const clearBtn   = document.getElementById("clear-btn");
+const esp32Badge = document.getElementById("esp32-badge");
+const modeBtn    = document.getElementById("mode-btn");
+const voiceOverlay= document.getElementById("voice-overlay");
+const voiceOverlayTxt = document.getElementById("voice-overlay-text");
+const uiTitle    = document.getElementById("ui-title");
+const langSelect = document.getElementById("lang-select");
+const themeBtn   = document.getElementById("theme-btn");
+
+// ─────────────────────────────────────────────
+//  Theme & Language setup
+// ─────────────────────────────────────────────
+const savedTheme = localStorage.getItem("xz_theme") || "light";
+document.documentElement.setAttribute("data-theme", savedTheme);
+themeBtn.textContent = savedTheme === "dark" ? "🌞" : "🌙";
+
+themeBtn.addEventListener("click", () => {
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  const newTheme = isDark ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", newTheme);
+  localStorage.setItem("xz_theme", newTheme);
+  themeBtn.textContent = isDark ? "🌙" : "🌞";
+});
+
+langSelect.value = currentLang;
+langSelect.addEventListener("change", (e) => {
+  currentLang = e.target.value; localStorage.setItem("xz_lang", currentLang);
+  updateUIStrings(); setState(STATE);
+});
+
+function updateUIStrings() {
+  uiTitle.textContent = t("title");
+  clearBtn.textContent = t("btn_clear");
+  cfgToggle.textContent = t("btn_config");
+  voiceOverlayTxt.textContent = t("voice_overlay");
+  esp32Badge.textContent = t("esp32_badge");
+  
+  if (currentMode === "text") {
+    modeBtn.textContent = t("mode_voice");
+    emptyText.textContent = t("empty_text");
+    inputEl.placeholder = t("placeholder");
+  } else {
+    modeBtn.textContent = t("mode_text");
+    emptyText.textContent = t("empty_voice");
+    inputEl.placeholder = ""; 
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Constants / storage keys
+// ─────────────────────────────────────────────
+const HIST_KEY = "xz_history";
+const DEV_KEY  = "xz_device_id";
+const MAX_HIST = 200;
+
+let deviceId = localStorage.getItem(DEV_KEY);
+if (!deviceId) {
+  deviceId = "web-" + crypto.getRandomValues(new Uint8Array(6)).reduce((s,b) => s + b.toString(16).padStart(2,"0"), "");
+  localStorage.setItem(DEV_KEY, deviceId);
+}
+
+// ─────────────────────────────────────────────
+//  State machine
+// ─────────────────────────────────────────────
+let STATE = "disconnected";
+
+function setState(s) {
+  STATE = s;
+  const locked = s !== "idle" || currentMode === "voice";
+  inputEl.disabled  = locked;
+  
+  const hasText = inputEl.value.trim().length > 0;
+  sendBtn.disabled  = locked || !hasText;
+  if(hasText && !locked) sendBtn.classList.add("active"); else sendBtn.classList.remove("active");
+
+  micBtn.disabled   = locked || !srSupported;
+  micBtn.classList.toggle("recording", s === "recording");
+  
+  const dots = { disconnected: "err", idle: "ok", recording: "busy", sending: "busy", thinking: "busy", responding: "busy" };
+  connDot.className = "conn-dot " + (dots[s] || "");
+  connLabel.textContent = t("state")[s] || s;
+
+  const timedStates = new Set(["sending", "thinking", "responding"]);
+  if (timedStates.has(s)) {
+    startElapsedTimer();
+  } else {
+    stopElapsedTimer();
+    const hints = { disconnected: t("hint_disconnected"), idle: t("hint_idle"), recording: t("hint_recording") };
+    statusEl.textContent = hints[s] || "";
+  }
+}
+
+// ── Minimal Markdown → HTML renderer ────────────────────────────────────
+function renderMarkdown(raw) {
+  // 1. Escape HTML to prevent injection
+  let s = raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // 2. Bold  **text** or __text__
+  s = s.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/__([\s\S]*?)__/g,     '<strong>$1</strong>');
+
+  // 3. Italic  *text* or _text_  (skip already-processed bold markers)
+  s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+  s = s.replace(/_([^_\n]+)_/g,   '<em>$1</em>');
+
+  // 4. Inline code  `text`
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // 5. Newlines → <br>
+  s = s.replace(/\n/g, '<br>');
+
+  return s;
+}
+
+function getTS() {
+  const d = new Date();
+  const pad = (n, w=2) => String(n).padStart(w, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
+}
+function _ms(t) { return t != null ? (t / 1000).toFixed(3) + 's' : '—'; }
+function loadHist()  { try { return JSON.parse(localStorage.getItem(HIST_KEY)||"[]"); } catch { return []; } }
+function saveHist(h) { localStorage.setItem(HIST_KEY, JSON.stringify(h.slice(-MAX_HIST))); }
+function pushHist(e) { const h=loadHist(); h.push(e); saveHist(h); }
+
+function scrollToBottom() {
+  msgsContainer.scrollTo({ top: msgsContainer.scrollHeight, behavior: 'smooth' });
+}
+
+function renderRow({role, text, time}, bubbleId) {
+  emptyEl.style.display = "none";
+  const row = document.createElement("div");
+  row.className = "row " + (role === "me" ? "me" : "bot");
+
+  if (role === "bot") {
+    const avatar = document.createElement("div");
+    avatar.className = "avatar"; avatar.innerHTML = "✨";
+    row.appendChild(avatar);
   }
 
-  async function send(){
-    const text = input.value.trim();
-    if(!text) return;
+  const msgContent = document.createElement("div");
+  msgContent.className = "msg-content";
 
-    addMsg("me", text);
-    input.value = "";
-    btn.disabled = true;
-    statusEl.textContent = "sending...";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.textContent = text;
+  if (bubbleId) bubble.id = bubbleId;
 
-    try{
-      const r = await fetch(API, {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ text })
-      });
+  const tEl = document.createElement("div");
+  tEl.className = "ts"; tEl.textContent = time || "";
 
-      if(!r.ok){
-        const t = await r.text();
-        throw new Error(`HTTP ${r.status}: ${t}`);
-      }
+  msgContent.append(bubble, tEl);
+  row.appendChild(msgContent);
+  
+  msgsEl.appendChild(row);
+  scrollToBottom();
+  return bubble;
+}
 
-      const data = await r.json();
+// ─────────────────────────────────────────────
+//  WebSocket
+// ─────────────────────────────────────────────
+let ws = null; let reconnectTimer = null; let reconnectDelay = 1000;
 
-      // Compatible with different field names
-      const reply = data.reply_text || data.text || data.message || JSON.stringify(data);
-      addMsg("bot", reply);
+// No application-level ping needed — the websockets server library sends
+// WebSocket protocol-level pings (ping_interval=20s) which the browser
+// handles silently without any JavaScript.  onclose fires automatically
+// when the server detects a stale connection, triggering the reconnect.
 
-      // Optional: auto-play audio if your backend returns audio_url
-      // if (data.audio_url) new Audio(data.audio_url).play();
-
-      statusEl.textContent = "ok";
-    }catch(e){
-      addMsg("bot", "(Request failed) " + e.message);
-      statusEl.textContent = "error";
-    }finally{
-      btn.disabled = false;
-      input.focus();
+// ── Reconnect countdown ──────────────────────────────────────────────────
+let countdownTimer = null;
+function showCountdown(totalMs) {
+  let remaining = Math.ceil(totalMs / 1000);
+  clearInterval(countdownTimer);
+  connLabel.textContent = remaining > 1
+    ? `Reconnecting in ${remaining}s…`
+    : "Reconnecting…";
+  countdownTimer = setInterval(() => {
+    remaining--;
+    if (remaining <= 1) {
+      clearInterval(countdownTimer);
+      connLabel.textContent = "Reconnecting…";
+    } else {
+      connLabel.textContent = `Reconnecting in ${remaining}s…`;
     }
+  }, 1000);
+}
+function clearCountdown() { clearInterval(countdownTimer); countdownTimer = null; }
+
+// ── Toast ────────────────────────────────────────────────────────────────
+function showToast(msg, durationMs = 2500) {
+  let toast = document.getElementById("_toast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "_toast";
+    Object.assign(toast.style, {
+      position:"fixed", bottom:"24px", left:"50%", transform:"translateX(-50%)",
+      background:"#323232", color:"#fff", padding:"10px 20px", borderRadius:"8px",
+      fontSize:"13px", zIndex:"9999", transition:"opacity .3s", opacity:"0",
+      pointerEvents:"none",
+    });
+    document.body.appendChild(toast);
   }
+  toast.textContent = msg;
+  toast.style.opacity = "1";
+  clearTimeout(toast._hideTimer);
+  toast._hideTimer = setTimeout(() => { toast.style.opacity = "0"; }, durationMs);
+}
+let responseTimer = null; const RESPONSE_TIMEOUT_MS = 180_000;
+let elapsedTimer = null; let elapsedStart = 0;
 
-  btn.addEventListener("click", send);
-  input.addEventListener("keydown", (e)=>{
-    if(e.key === "Enter" && !e.shiftKey){
-      e.preventDefault();
-      send();
+function armResponseTimeout() {
+  clearTimeout(responseTimer);
+  responseTimer = setTimeout(() => {
+    if (STATE !== "idle" && STATE !== "disconnected" && STATE !== "recording") {
+      stopElapsedTimer(); finalizeBotBubble(); setState("idle"); statusEl.textContent = t("alert_timeout");
     }
+  }, RESPONSE_TIMEOUT_MS);
+}
+function cancelResponseTimeout() { clearTimeout(responseTimer); }
+
+function startElapsedTimer() {
+  stopElapsedTimer(); elapsedStart = Date.now();
+  elapsedTimer = setInterval(() => {
+    const sec = Math.round((Date.now() - elapsedStart) / 1000);
+    const base = STATE === "thinking" ? t("time_waiting") : STATE === "responding" ? t("time_responding") : STATE === "sending" ? t("time_sending") : null;
+    if (base) statusEl.textContent = `${base} (${sec}s)`;
+  }, 1000);
+}
+function stopElapsedTimer() { clearInterval(elapsedTimer); elapsedTimer = null; }
+
+async function resolveWsUrl() {
+  try {
+    const info = await fetch("/ws_info").then(r => r.json());
+    let base = info.ws_url || ""; if (!base.endsWith("/")) base += "/";
+    return base + "?device-id=" + encodeURIComponent(deviceId);
+  } catch {
+    return "ws://" + location.hostname + ":8000/xiaozhi/v1/?device-id=" + encodeURIComponent(deviceId);
+  }
+}
+
+let _wasConnected = false;   // track first-ever vs subsequent connects
+
+function connect() {
+  if (ws && ws.readyState < 2) return;
+  setState("disconnected");
+  resolveWsUrl().then(url => {
+    ws = new WebSocket(url); ws.binaryType = "arraybuffer";
+
+    ws.onopen = () => {
+      reconnectDelay = 1000;
+      clearCountdown();
+      ws.send(JSON.stringify({
+        type: "hello", version: 1, transport: "websocket",
+        audio_params: {format:"opus", sample_rate:16000, channels:1, frame_duration:60}
+      }));
+      if (_wasConnected) showToast("✓ Reconnected");
+    };
+
+    ws.onmessage = onMessage;
+
+    ws.onclose = () => {
+      _wasConnected = true;   // next successful open is a reconnect
+      setState("disconnected");
+      modeBtn.disabled = true;
+      scheduleReconnect();
+    };
+
+    ws.onerror = () => { ws.close(); };
   });
+}
 
-  addMsg("bot", "Hi! This is Text Input mode. Type your question and press Send.");
+function scheduleReconnect() {
+  clearTimeout(reconnectTimer); reconnectTimer = setTimeout(() => connect(), reconnectDelay);
+  const delay = reconnectDelay;
+  reconnectDelay = Math.min(reconnectDelay * 2, 16000);
+  showCountdown(delay);
+}
+
+let botBubble = null; let botText = ""; let botTime = "";
+
+// ── Latency tracking ────────────────────────────────────────────────────
+let _sendT      = null;   // performance.now() when user sent the message
+let _firstTokenT = null;  // performance.now() when first sentence_start arrived
+
+function startBotBubble() {
+  botText = ""; botTime = getTS();
+  _firstTokenT = performance.now();   // first token timestamp
+  botBubble = renderRow({role:"bot", text:"", time:""}, "bot-live");
+  botBubble.classList.add("typing");
+}
+function appendBotChunk(chunk) {
+  if (!botBubble) startBotBubble();
+  botText += chunk; botBubble.innerHTML = renderMarkdown(botText); botBubble.classList.remove("typing");
+  scrollToBottom();
+}
+function finalizeBotBubble() {
+  if (!botBubble) return;
+  botBubble.removeAttribute("id"); botBubble.classList.remove("typing");
+  if (botText) {
+    // ── Compute latency numbers ──
+    const now   = performance.now();
+    const ttft  = (_firstTokenT != null && _sendT != null) ? (_firstTokenT - _sendT)  : null;
+    const total = (_sendT != null)                         ? (now          - _sendT)   : null;
+
+    pushHist({role:"bot", text:botText, time:botTime});
+
+    const row = botBubble.closest(".row");
+    const tsEl = row.querySelector(".ts");
+    tsEl.textContent = botTime;
+
+    // ── Append latency badge ──
+    const badge = document.createElement("div");
+    badge.className = "latency-badge";
+    badge.title = "TTFT = time to first token · Total = full response duration";
+    badge.textContent = `⏱ TTFT ${_ms(ttft)} · Total ${_ms(total)}`;
+    row.appendChild(badge);
+  } else { botBubble.closest(".row").remove(); }
+  botBubble = null; botText = "";
+  _sendT = null; _firstTokenT = null;
+}
+
+function onMessage(ev) {
+  if (ev.data instanceof ArrayBuffer) return;
+  let msg; try { msg = JSON.parse(ev.data); } catch { return; }
+
+  switch (msg.type) {
+    case "hello":
+      setState("idle");          // always mark as connected (green dot)
+      modeBtn.disabled = false;
+      applyMode(currentMode);   // voice mode keeps inputs locked via setState logic
+      _wasConnected = true;
+      break;
+    case "stt":
+      if (STATE === "sending") setState("thinking");
+      break;
+    case "tts":
+      if (msg.state === "start") { setState("responding"); setEsp32Badge(true); armResponseTimeout(); } 
+      else if (msg.state === "sentence_start" && msg.text) { appendBotChunk(msg.text); armResponseTimeout(); } 
+      else if (msg.state === "stop") { cancelResponseTimeout(); stopElapsedTimer(); finalizeBotBubble(); setEsp32Badge(false); setState("idle"); }
+      break;
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Send & Voice
+// ─────────────────────────────────────────────
+function sendText(text) {
+  text = (text || "").trim();
+  if (!text || STATE !== "idle" || !ws || ws.readyState !== 1) return;
+  const time = getTS();
+  renderRow({role:"me", text, time}); pushHist({role:"me", text, time});
+  inputEl.value = ""; inputEl.style.height = "auto";
+  _sendT = performance.now();   // start latency clock
+  setState("sending"); armResponseTimeout();
+  ws.send(JSON.stringify({type:"listen", state:"detect", text}));
+}
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const srSupported = !!SR; let recognition = null;
+if (srSupported) {
+  recognition = new SR(); recognition.continuous = false; recognition.interimResults = true; recognition.maxAlternatives = 1;
+  recognition.onstart = () => setState("recording");
+  recognition.onresult = (e) => {
+    const r = e.results[e.results.length - 1]; const transcript = r[0].transcript.trim();
+    inputEl.value = transcript; setState(STATE);
+    if (r.isFinal && transcript) sendText(transcript);
+  };
+  recognition.onerror = () => setState("idle");
+  recognition.onend = () => { if (STATE === "recording") setState("idle"); };
+  micBtn.addEventListener("click", () => {
+    if (STATE === "recording") { recognition.stop(); return; }
+    if (STATE !== "idle") return;
+    inputEl.value = ""; recognition.lang = navigator.language || "zh-CN";
+    try { recognition.start(); } catch (_) {}
+  });
+} else { micBtn.disabled = true; }
+
+sendBtn.addEventListener("click", () => sendText(inputEl.value));
+inputEl.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(inputEl.value); } });
+inputEl.addEventListener("input", () => { 
+  inputEl.style.height = "auto"; inputEl.style.height = Math.min(inputEl.scrollHeight, 200) + "px"; 
+  setState(STATE); 
+});
+
+function setEsp32Badge(v) { esp32Badge.style.display = v ? "inline" : "none"; }
+
+// ─────────────────────────────────────────────
+//  Config & Mode & History
+// ─────────────────────────────────────────────
+cfgToggle.addEventListener("click", () => cfgPanel.classList.toggle("open"));
+async function loadConfig() {
+  try {
+    const cfg = await fetch("/api/config").then(r => r.json());
+    cfgMode.textContent = `Mode: ${cfg.mode === "manager-api" ? "Manager-API" : "Standalone"} • LLM: ${cfg.llm_ready ? "Online" : "Offline"}`;
+    cfgGrid.innerHTML = "";
+    Object.entries({LLM:"LLM", TTS:"TTS", ASR:"ASR", Memory:"Memory", Intent:"Intent"}).forEach(([k, label]) => {
+      const div = document.createElement("div"); div.className = "cfg-item";
+      div.innerHTML = `<span class="cfg-label">${label}</span><span class="cfg-val">${cfg.selected_modules?.[k] || "—"}</span>`;
+      cfgGrid.appendChild(div);
+    });
+    if (cfg.mode === "manager-api" && cfg.manager_api_url) { cfgAdminLk.href = "http://127.0.0.1:8001/#/home"; cfgAdminLk.style.display = "inline-block"; }
+  } catch {}
+}
+loadConfig();
+
+clearBtn.addEventListener("click", () => {
+  if (!confirm(t("alert_clear"))) return;
+  localStorage.removeItem(HIST_KEY);
+  [...msgsEl.querySelectorAll(".row")].forEach(r => r.remove());
+  emptyEl.style.display = "flex";
+});
+
+(function restoreHistory() {
+  const hist = loadHist();
+  if (hist.length) { hist.forEach(e => renderRow(e)); scrollToBottom(); }
+})();
+
+// Always start in voice mode — ESP32 is the default input.
+// Mode is never restored from localStorage so every page open is clean.
+let currentMode = "voice";
+function applyMode(mode, sendToServer = true) {
+  currentMode = mode;
+  const isText = (mode === "text");
+  
+  modeBtn.className = "mode-btn " + (isText ? "text" : "voice");
+  voiceOverlay.classList.toggle("show", !isText);
+  
+  updateUIStrings();
+  setState(STATE);
+  
+  if (sendToServer && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "web_mode", mode }));
+}
+
+modeBtn.addEventListener("click", () => applyMode(currentMode === "voice" ? "text" : "voice"));
+
+// When the tab/window closes while in text mode, tell the server to restore
+// voice mode immediately.  The server's disconnect handler (connection.py
+// finally block) also resets text_mode_active, so this fires slightly earlier.
+window.addEventListener("pagehide", () => {
+  if (currentMode === "text" && ws && ws.readyState === WebSocket.OPEN) {
+    try { ws.send(JSON.stringify({ type: "web_mode", mode: "voice" })); } catch (_) {}
+  }
+});
+
+
+updateUIStrings();
+connect();
 </script>
 </body>
 </html>

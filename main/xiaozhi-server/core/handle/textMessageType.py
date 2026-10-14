@@ -9,3 +9,5 @@ class TextMessageType(Enum):
     IOT = "iot"
     MCP = "mcp"
     SERVER = "server"
+    WEB_MODE = "web_mode"
+    PING = "ping"

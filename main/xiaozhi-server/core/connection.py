@@ -147,6 +147,8 @@ class ConnectionHandler:
 
         # 是否在聊天结束后关闭连接
         self.close_after_chat = False
+        # True for browser web-text-chat clients (device-id starts with "web-")
+        self.is_web_connection = False
         self.load_function_plugin = False
         self.intent_type = "nointent"
 
@@ -180,6 +182,7 @@ class ConnectionHandler:
             )
 
             self.device_id = self.headers.get("device-id", None)
+            self.is_web_connection = (self.device_id or "").startswith("web-")
 
             # 认证通过,继续处理
             self.websocket = ws
@@ -219,6 +222,10 @@ class ConnectionHandler:
             self.logger.bind(tag=TAG).error(f"Connection error: {str(e)}-{stack_trace}")
             return
         finally:
+            # When a web client disconnects restore voice mode so the ESP32
+            # can process audio again regardless of what mode was active.
+            if self.is_web_connection and self.server:
+                self.server.text_mode_active = False
             try:
                 await self._save_and_close(ws)
             except Exception as final_error:
@@ -430,16 +437,17 @@ class ConnectionHandler:
             """初始化本地组件"""
             if self.vad is None:
                 self.vad = self._vad
-            if self.asr is None:
-                self.asr = self._initialize_asr()
 
-            # 初始化声纹识别
-            self._initialize_voiceprint()
-
-            # 打开语音识别通道
-            asyncio.run_coroutine_threadsafe(
-                self.asr.open_audio_channels(self), self.loop
-            )
+            # ASR and voice channels are not needed for web text-only connections
+            if not self.is_web_connection:
+                if self.asr is None:
+                    self.asr = self._initialize_asr()
+                # 初始化声纹识别
+                self._initialize_voiceprint()
+                # 打开语音识别通道
+                asyncio.run_coroutine_threadsafe(
+                    self.asr.open_audio_channels(self), self.loop
+                )
             if self.tts is None:
                 self.tts = self._initialize_tts()
             # 打开语音合成通道
@@ -484,13 +492,20 @@ class ConnectionHandler:
 
     def _initialize_tts(self):
         """初始化TTS"""
+        if self.is_web_connection:
+            from core.providers.tts.web import WebTTS
+            return WebTTS(self.config, delete_audio_file=True)
+
         tts = None
         if not self.need_bind:
-            tts = initialize_tts(self.config)
-
+            try:
+                tts = initialize_tts(self.config)
+            except Exception as e:
+                self.logger.bind(tag=TAG).warning(
+                    f"TTS init failed ({e}), falling back to DefaultTTS"
+                )
         if tts is None:
             tts = DefaultTTS(self.config, delete_audio_file=True)
-
         return tts
 
     def _initialize_asr(self):
@@ -526,6 +541,8 @@ class ConnectionHandler:
         """如果是从配置文件获取，则进行二次实例化"""
         if not self.read_config_from_api:
             return
+        if self.is_web_connection:
+            return  # web clients use shared server config; skip per-device API lookup
         """从接口获取差异化的配置进行二次实例化，非全量重新实例化"""
         try:
             begin_time = time.time()
@@ -609,6 +626,12 @@ class ConnectionHandler:
                 ] = plugin_from_server.keys()
         if private_config.get("prompt", None) is not None:
             self.config["prompt"] = private_config["prompt"]
+            # Keep server-level cache up-to-date so web connections can sync
+            if self.server is not None:
+                self.server.cached_device_prompt = private_config["prompt"]
+                self.server.cached_device_selected_modules = dict(
+                    self.config.get("selected_module", {})
+                )
         # 获取声纹信息
         if private_config.get("voiceprint", None) is not None:
             self.config["voiceprint"] = private_config["voiceprint"]
@@ -642,6 +665,10 @@ class ConnectionHandler:
             self.asr = modules["asr"]
         if modules.get("llm", None) is not None:
             self.llm = modules["llm"]
+            # Always update server cache so web connections pick up the
+            # latest LLM even after an admin model change + ESP32 reconnect.
+            if self.server is not None and not self.is_web_connection:
+                self.server._llm = self.llm
         if modules.get("intent", None) is not None:
             self.intent = modules["intent"]
         if modules.get("memory", None) is not None:
@@ -744,11 +771,42 @@ class ConnectionHandler:
         self.dialogue.update_system_message(self.prompt)
 
     def chat(self, query, depth=0):
+        # ── Sync web connection with the latest per-device config ──────────
+        # ESP32 connections cache their config on ws_server whenever they
+        # connect (or reconnect after an admin change).  Web connections read
+        # those cached values here so both inputs always share the same LLM,
+        # system prompt, memory module, and intent module.
+        if self.is_web_connection and self.server is not None and depth == 0:
+            # LLM — always use the latest device LLM
+            latest_llm = getattr(self.server, "_llm", None)
+            if latest_llm is not None:
+                self.llm = latest_llm
+
+            # System prompt — re-apply if it changed since last chat
+            latest_prompt = getattr(self.server, "cached_device_prompt", None)
+            if latest_prompt and latest_prompt != self.prompt:
+                self.change_system_prompt(latest_prompt)
+
+        # Lazy-load LLM if still None (web connected before any ESP32)
+        if self.llm is None and self.server is not None:
+            self.llm = getattr(self.server, "_llm", None)
+
         if query is not None:
             self.logger.bind(tag=TAG).info(f"大模型收到用户消息: {query}")
 
         # 为最顶层时新建会话ID和发送FIRST请求
         if depth == 0:
+            if self.llm is None:
+                self.logger.bind(tag=TAG).error("LLM not available — no ESP32 has connected yet to supply credentials")
+                self.tts.tts_text_queue.put(
+                    TTSMessageDTO(
+                        sentence_id=str(uuid.uuid4().hex),
+                        sentence_type=SentenceType.LAST,
+                        content_type=ContentType.END,
+                    )
+                )
+                return
+
             self.llm_finish_task = False
             self.sentence_id = str(uuid.uuid4().hex)
             self.dialogue.put(Message(role="user", content=query))
@@ -795,7 +853,12 @@ class ConnectionHandler:
                 future = asyncio.run_coroutine_threadsafe(
                     self.memory.query_memory(query), self.loop
                 )
-                memory_str = future.result()
+                try:
+                    memory_str = future.result(timeout=8)
+                except Exception as mem_err:
+                    self.logger.bind(tag=TAG).warning(
+                        f"Memory query timed out or failed ({mem_err}), proceeding without memory"
+                    )
 
             if self.intent_type == "function_call" and functions is not None:
                 # 使用支持functions的streaming接口
@@ -815,6 +878,20 @@ class ConnectionHandler:
                 )
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"LLM 处理出错 {query}: {e}")
+            # Always signal LAST so the TTS thread doesn't wait forever.
+            # Without this the TTS queue blocks indefinitely, leaving the
+            # ESP32 silent until it times out and sends abort.
+            if depth == 0 and self.tts is not None:
+                try:
+                    self.tts.tts_text_queue.put(
+                        TTSMessageDTO(
+                            sentence_id=self.sentence_id,
+                            sentence_type=SentenceType.LAST,
+                            content_type=ContentType.END,
+                        )
+                    )
+                except Exception:
+                    pass
             return None
 
         # 处理流式响应
@@ -1181,6 +1258,14 @@ class ConnectionHandler:
         """检查连接超时"""
         try:
             while not self.stop_event.is_set():
+                # Web browser connections have no voice activity, so the
+                # inactivity timer would always fire.  Keep them alive for
+                # as long as the tab is open — the WebSocket ping/pong
+                # (ping_interval=20s) handles stale-connection detection.
+                if self.is_web_connection:
+                    await asyncio.sleep(10)
+                    continue
+
                 last_activity_time = self.last_activity_time
                 if self.need_bind:
                     last_activity_time = self.first_activity_time

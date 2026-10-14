@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus AI Control Panel</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-slate-50 min-h-screen flex items-center justify-center p-4 selection:bg-blue-200">
+
+    <div id="app" class="w-full max-w-lg bg-white rounded-2xl shadow-xl overflow-hidden transition-all duration-300 border border-slate-100">
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-microchip"></i> Nexus AI
+                </h1>
+                <p class="text-blue-100 text-sm mt-1 opacity-90">{{ t('subtitle') }}</p>
+            </div>
+            
+            <div class="relative">
+                <select v-model="currentLang" class="bg-white/20 border border-white/30 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 appearance-none cursor-pointer outline-none transition-colors hover:bg-white/30">
+                    <option value="zh" class="text-slate-800">中文 (ZH)</option>
+                    <option value="en" class="text-slate-800">English (EN)</option>
+                    <option value="ms" class="text-slate-800">Bahasa Melayu (MS)</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white">
+                    <i class="fa-solid fa-chevron-down text-xs"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-6 space-y-6">
+            <div v-if="statusMessage" 
+                 :class="{'bg-blue-50 text-blue-700 border-blue-200': statusType === 'loading',
+                          'bg-emerald-50 text-emerald-700 border-emerald-200': statusType === 'success',
+                          'bg-rose-50 text-rose-700 border-rose-200': statusType === 'error'}"
+                 class="px-4 py-3 rounded-lg border text-sm flex items-center gap-3 transition-all">
+                <i v-if="statusType === 'loading'" class="fa-solid fa-circle-notch fa-spin"></i>
+                <i v-if="statusType === 'success'" class="fa-solid fa-circle-check"></i>
+                <i v-if="statusType === 'error'" class="fa-solid fa-circle-exclamation"></i>
+                <span class="font-medium">{{ statusMessage }}</span>
+            </div>
+
+            <div class="space-y-3">
+                <label for="text-input" class="block text-sm font-semibold text-slate-700">
+                    {{ t('inputLabel') }}
+                </label>
+                <div class="relative">
+                    <textarea 
+                        id="text-input"
+                        v-model="inputText" 
+                        @keydown.enter.prevent="sendMessage"
+                        :placeholder="t('placeholder')"
+                        class="block w-full p-4 text-slate-800 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none shadow-sm h-32 outline-none"
+                    ></textarea>
+                </div>
+                <p class="text-xs text-slate-400 flex justify-end">
+                    {{ t('hint') }}
+                </p>
+            </div>
+
+            <button 
+                @click="sendMessage" 
+                :disabled="isSending || !inputText.trim()"
+                class="w-full flex items-center justify-center gap-2 text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 font-medium rounded-xl text-md px-5 py-3.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-500/30"
+            >
+                <span>{{ isSending ? t('sendingBtn') : t('sendBtn') }}</span>
+                <i class="fa-solid fa-paper-plane" :class="{'fa-fade': isSending}"></i>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed } = Vue
+
+        createApp({
+            setup() {
+                // 多语言字典
+                const i18n = {
+                    zh: {
+                        subtitle: '终端控制台',
+                        inputLabel: '发送指令',
+                        placeholder: '请输入你想对小智说的话...',
+                        hint: '按 Enter 键快速发送',
+                        sendBtn: '发送至设备',
+                        sendingBtn: '正在发送...',
+                        statusEmpty: '输入内容不能为空',
+                        statusSending: '指令已发送，等待设备响应...',
+                        statusSuccess: '发送成功！小智正在思考...',
+                        statusError: '发送失败: ',
+                        statusNetError: '网络错误，请检查服务器连接'
+                    },
+                    en: {
+                        subtitle: 'Terminal Console',
+                        inputLabel: 'Send Command',
+                        placeholder: 'Type your message to Xiaozhi here...',
+                        hint: 'Press Enter to send',
+                        sendBtn: 'Send to Device',
+                        sendingBtn: 'Sending...',
+                        statusEmpty: 'Input cannot be empty',
+                        statusSending: 'Command sent, waiting for device...',
+                        statusSuccess: 'Success! Xiaozhi is thinking...',
+                        statusError: 'Failed to send: ',
+                        statusNetError: 'Network error, check server connection'
+                    },
+                    ms: {
+                        subtitle: 'Konsol Terminal',
+                        inputLabel: 'Hantar Arahan',
+                        placeholder: 'Taip mesej anda kepada Xiaozhi di sini...',
+                        hint: 'Tekan Enter untuk menghantar',
+                        sendBtn: 'Hantar ke Peranti',
+                        sendingBtn: 'Menghantar...',
+                        statusEmpty: 'Input tidak boleh kosong',
+                        statusSending: 'Arahan dihantar, menunggu peranti...',
+                        statusSuccess: 'Berjaya! Xiaozhi sedang berfikir...',
+                        statusError: 'Gagal menghantar: ',
+                        statusNetError: 'Ralat rangkaian, periksa sambungan pelayan'
+                    }
+                }
+
+                // 响应式状态
+                const currentLang = ref('zh')
+                const inputText = ref('')
+                const isSending = ref(false)
+                const statusMessage = ref('')
+                const statusType = ref('') // 'loading', 'success', 'error'
+
+                // 翻译辅助函数
+                const t = (key) => {
+                    return i18n[currentLang.value][key] || key
+                }
+
+                // 显示状态信息
+                const showStatus = (msg, type, duration = 3000) => {
+                    statusMessage.value = msg
+                    statusType.value = type
+                    if (type !== 'loading' && duration > 0) {
+                        setTimeout(() => {
+                            if (statusMessage.value === msg) {
+                                statusMessage.value = ''
+                                statusType.value = ''
+                            }
+                        }, duration)
+                    }
+                }
+
+                // 发送消息到服务器
+                const sendMessage = async () => {
+                    const text = inputText.value.trim()
+                    if (!text) {
+                        showStatus(t('statusEmpty'), 'error')
+                        return
+                    }
+
+                    isSending.value = true
+                    showStatus(t('statusSending'), 'loading', 0)
+
+                    try {
+                        const response = await fetch('/api/send_text', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ text: text })
+                        })
+                        
+                        const result = await response.json()
+                        
+                        if (result.success) {
+                            showStatus(t('statusSuccess'), 'success')
+                            inputText.value = '' // 清空输入框
+                        } else {
+                            showStatus(t('statusError') + result.error, 'error', 5000)
+                        }
+                    } catch (error) {
+                        showStatus(t('statusNetError'), 'error', 5000)
+                    } finally {
+                        isSending.value = false
+                    }
+                }
+
+                return {
+                    currentLang,
+                    inputText,
+                    isSending,
+                    statusMessage,
+                    statusType,
+                    t,
+                    sendMessage
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>

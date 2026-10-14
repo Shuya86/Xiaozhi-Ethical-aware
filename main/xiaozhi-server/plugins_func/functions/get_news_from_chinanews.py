@@ -43,7 +43,7 @@ GET_NEWS_FROM_CHINANEWS_FUNCTION_DESC = {
 def fetch_news_from_rss(rss_url):
     """从RSS源获取新闻列表"""
     try:
-        response = requests.get(rss_url)
+        response = requests.get(rss_url, timeout=8)
         response.raise_for_status()
 
         # 解析XML
@@ -85,7 +85,7 @@ def fetch_news_from_rss(rss_url):
 def fetch_news_detail(url):
     """获取新闻详情页内容并总结"""
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=8)
         response.raise_for_status()
 
         soup = BeautifulSoup(response.content, "html.parser")

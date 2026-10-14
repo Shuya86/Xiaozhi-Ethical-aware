@@ -7,6 +7,8 @@ from core.handle.textHandler.listenMessageHandler import ListenTextMessageHandle
 from core.handle.textHandler.mcpMessageHandler import McpTextMessageHandler
 from core.handle.textMessageHandler import TextMessageHandler
 from core.handle.textHandler.serverMessageHandler import ServerTextMessageHandler
+from core.handle.textHandler.webModeMessageHandler import WebModeMessageHandler
+from core.handle.textHandler.pingMessageHandler import PingMessageHandler
 
 TAG = __name__
 
@@ -27,6 +29,8 @@ class TextMessageHandlerRegistry:
             IotTextMessageHandler(),
             McpTextMessageHandler(),
             ServerTextMessageHandler(),
+            WebModeMessageHandler(),
+            PingMessageHandler(),
         ]
 
         for handler in handlers:

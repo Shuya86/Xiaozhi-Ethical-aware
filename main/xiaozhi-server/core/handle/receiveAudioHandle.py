@@ -11,6 +11,11 @@ TAG = __name__
 
 
 async def handleAudioMessage(conn, audio):
+    if conn.asr is None:
+        return  # web text-only connections have no ASR
+    # Pause ESP32 audio while text mode is active (web client is typing).
+    if getattr(conn.server, "text_mode_active", False):
+        return
     # 当前片段是否有人说话
     have_voice = conn.vad.is_vad(conn, audio)
     # 如果设备刚刚被唤醒，短暂忽略VAD检测

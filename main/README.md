@@ -1,5 +1,9 @@
 # 技术文档：`xiaozhi-esp32-server`
 
+完整系统的安装、启动、停止及硬件上线顺序请参阅
+[系统部署与启动指南（中文）](./README_DEPLOY_ZH.md)；英文版见
+[System Deployment and Startup Guide](./README_DEPLOY_EN.md)。
+
 **目录：**
 
 1.  [引言](#1-引言)

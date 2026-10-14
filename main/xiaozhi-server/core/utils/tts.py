@@ -128,9 +128,10 @@ class MarkdownCleaner:
         """
         主入口方法：依序执行所有正则，移除或替换 Markdown 元素
         """
-        # 检查文本是否全为英文和基本标点符号
-        if text and all((c.isascii() or c.isspace() or c in punctuation_set) for c in text):
-            # 保留原始空格，直接返回
+        # Skip cleaning only when the text has no markdown markers at all.
+        # The previous shortcut (skip all ASCII text) caused ** to pass
+        # through unchanged when the LLM replied in English.
+        if text and not any(c in '*#_`[]!>$\\|' for c in text):
             return text
 
         for regex, replacement in MarkdownCleaner.REGEXES:
