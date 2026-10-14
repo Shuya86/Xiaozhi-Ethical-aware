@@ -65,6 +65,16 @@ IPv4；仅当 `server.ota` 或 `server.websocket` 中的 IP 已过期时才更�
 python auto_deploy.py --only voiceprint,mcp
 ```
 
+## 隐私与 Git
+
+自动识别的局域网 IP、manager-api secret、模型 API 密钥和访问令牌只应写入
+运行时配置或数据库，不应提交到 Git。仓库根目录 `.gitignore` 已忽略
+`main/xiaozhi-server/data/`、部署状态、日志、`*.local.*` 本地覆盖文件、
+私钥和证书。需要提供配置范例时，请只提交不含真实值的 `*.example` 文件。
+
+`.gitignore` 不能清除已经提交过的秘密。如果真实密钥曾经进入 Git 历史，
+应立即在服务商处吊销并重新生成，再单独清理 Git 历史。
+
 ## 失败定位
 
 部署器在任一阶段失败时会停止后续阶段并返回非零退出码，不再把端口超时显示为成功。常用日志：

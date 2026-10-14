@@ -22,6 +22,10 @@ class WebModeMessageHandler(TextMessageHandler):
         if not conn.is_web_connection or conn.server is None:
             return
         mode = msg_json.get("mode", "voice")
+        if mode == "text" and not conn.server.hardware_status()["llm_ready"]:
+            conn.server.text_mode_active = False
+            await conn.server._send_hardware_status(conn.websocket)
+            return
         conn.server.text_mode_active = (mode == "text")
         conn.logger.bind(tag=TAG).info(
             f"Input mode → {'text (ESP32 standby)' if mode == 'text' else 'voice (ESP32 active)'}"

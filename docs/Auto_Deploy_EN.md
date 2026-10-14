@@ -86,6 +86,18 @@ their sibling directories already exist, start them with:
 python auto_deploy.py --only voiceprint,mcp
 ```
 
+## Privacy and Git
+
+The detected LAN IP, manager-api secret, model API keys, and access tokens must
+remain in runtime configuration or the database and must not be committed.
+The root `.gitignore` excludes `main/xiaozhi-server/data/`, deployment state,
+logs, `*.local.*` overrides, private keys, and certificates. Commit only
+sanitized `*.example` files when a configuration sample is needed.
+
+`.gitignore` cannot remove secrets that were already committed. If a real key
+ever entered Git history, revoke and rotate it at the provider first, then
+clean the repository history separately.
+
 ## Troubleshooting
 
 The deployment stops at the first failed stage and returns a non-zero exit

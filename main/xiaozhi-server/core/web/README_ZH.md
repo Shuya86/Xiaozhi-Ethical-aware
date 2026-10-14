@@ -19,6 +19,11 @@ LLM、系统提示词、记忆和意图模块。
 `llm_ready: false`，输入区保持不可用。这是预期行为，不能通过网页端
 填写 API Key 或使用默认 LLM 绕过。
 
+页面分别显示浏览器连接、WebSocket 监听端口和 ESP32 硬件状态。ESP32
+通过认证并建立 WebSocket 后会实时显示“在线”；正常断开时立即显示“离线”，
+异常断网最迟在协议 Ping/Pong 超时后更新。硬件离线不会关闭 `8000` 监听
+端口，网页连接也会保留，以便设备重连时立即收到上线事件。
+
 ## 使用方法
 
 1. 在智控台配置设备智能体、LLM API Key 和系统提示词；
@@ -35,10 +40,10 @@ LLM、系统提示词、记忆和意图模块。
 | 路径 | 用途 |
 | --- | --- |
 | `GET /text_chat` | 返回聊天页面 |
-| `GET /api/config` | 返回模块状态和 `llm_ready` 门控状态 |
+| `GET /api/config` | 返回模块、硬件在线状态、连接数、监听端口和 `llm_ready` 门控状态 |
 | `GET /ws_info` | 返回浏览器应连接的 WebSocket 地址 |
 | `GET /health` | 部署器和监控使用的就绪检查 |
-| `ws://<host>:8000/xiaozhi/v1/` | 聊天 WebSocket |
+| `ws://<host>:8000/xiaozhi/v1/` | 聊天 WebSocket，并向网页推送 `hardware_status` |
 
 浏览器生成以 `web-` 开头的独立 `device-id`，服务器据此识别网页连接。
 API Key 和 manager-api secret 不会发送到浏览器。
@@ -47,7 +52,7 @@ API Key 和 manager-api secret 不会发送到浏览器。
 
 - `text_chat.html`：界面、语言切换、自动重连、输入模式和延迟显示；
 - `../http_server.py`：页面、配置、地址和健康检查接口；
-- `../websocket_server.py`：共享设备配置与文本/语音模式状态；
+- `../websocket_server.py`：维护硬件连接注册表、实时状态推送及文本/语音模式；
 - `../handle/textHandler/webModeMessageHandler.py`：模式切换消息处理。
 
 WebSocket 消息协议的开发说明见
@@ -55,6 +60,8 @@ WebSocket 消息协议的开发说明见
 
 ## 常见问题
 
+- 页面显示 ESP32 Offline：确认硬件连接的是本机 OTA/WebSocket 地址，且
+  与服务器处于可互通网络；端口显示“监听中”仅代表后端可接受连接。
 - 页面显示 LLM Offline：确认 ESP32 已连接，并在智控台为其智能体配置了
   可用的 LLM；修改智能体配置后让设备重新连接。
 - 页面无法连接：检查端口 `8000`、`8003` 和防火墙设置，并访问

@@ -62,10 +62,23 @@ disconnects.
 {"type": "listen", "state": "detect", "text": "Hello"}
 ```
 
-The server processes the message with the LLM and system prompt supplied by
-the most recently connected ESP32. It returns status and streamed text through
-the existing `stt` and `tts` messages. If no ESP32 has come online, the server
-does not create a default LLM and does not process the chat request.
+The server processes the message with the LLM and system prompt supplied by a
+currently connected ESP32. It returns status and streamed text through the
+existing `stt` and `tts` messages. If the ESP32 is offline, the browser
+WebSocket remains connected for status updates, but chat requests are rejected.
+
+## Hardware status message
+
+When an ESP32 connects or disconnects, the server immediately pushes this to
+all browser connections:
+
+```json
+{"type":"hardware_status","online":true,"connection_count":1,"llm_ready":true,"listener":"listening","ws_port":8000}
+```
+
+The payload contains no device ID, IP address, or secret. Broken connections
+are detected by server-side WebSocket Ping/Pong; the listening port remains
+open while the device is offline.
 
 ## Keepalive
 

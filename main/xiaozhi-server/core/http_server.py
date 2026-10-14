@@ -132,6 +132,12 @@ class SimpleHttpServer:
         if not text:
             return web.json_response({"error": "text is empty"}, status=400)
 
+        if not self.ws_server.hardware_online:
+            return web.json_response(
+                {"error": "ESP32 hardware is offline"},
+                status=503,
+            )
+
         llm = self._get_llm()
         if llm is None:
             return web.json_response(
@@ -175,9 +181,11 @@ class SimpleHttpServer:
         def sel(key):
             return cached.get(key) or fallback.get(key) or "—"
 
-        llm_ready = (
-            self.ws_server._llm is not None or self._text_llm is not None
-        )
+        hardware = self.ws_server.hardware_status()
+        model_ready = self.ws_server._llm is not None
+        # Hardware-first gate: a cached model remains useful for a reconnect,
+        # but it must not make browser chat look available while ESP32 is gone.
+        llm_ready = hardware["online"] and model_ready
         return web.json_response({
             "mode": mode,
             "manager_api_url": manager_url,
@@ -189,7 +197,14 @@ class SimpleHttpServer:
                 "Intent": sel("Intent"),
             },
             "llm_ready": llm_ready,
-            "synced": llm_ready,   # true once an ESP32 has connected
+            "model_ready": model_ready,
+            "synced": hardware["online"],
+            "hardware_online": hardware["online"],
+            "hardware_connections": hardware["connection_count"],
+            "websocket_listener": {
+                "state": hardware["listener"],
+                "port": hardware["ws_port"],
+            },
         })
 
     async def handle_ws_info(self, request: web.Request):

@@ -226,7 +226,11 @@
 
     /* ── Sub Status Bar (Under Input Box) ── */
     .sub-status { margin-top: 12px; font-size: 12px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; max-width: 820px; pointer-events: auto; font-weight: 400; }
-    #esp32-badge { background: transparent; border: 1px solid currentColor; color: #f79009; padding: 2px 8px; border-radius: 12px; font-weight: 500; font-size: 11px; }
+    .runtime-badge { background: transparent; border: 1px solid currentColor; padding: 2px 8px; border-radius: 12px; font-weight: 500; font-size: 11px; }
+    #esp32-badge.online { color: #12b76a; }
+    #esp32-badge.offline { color: #f04438; }
+    #listener-badge.listening { color: #12b76a; }
+    #listener-badge.starting { color: #f79009; }
   </style>
 </head>
 <body>
@@ -298,7 +302,8 @@
     
     <div class="sub-status">
       <span id="status-text">Connecting...</span>
-      <span id="esp32-badge" style="display:none;">ESP32 Active</span>
+      <span id="listener-badge" class="runtime-badge starting">Port 8000 Starting</span>
+      <span id="esp32-badge" class="runtime-badge offline">ESP32 Offline</span>
     </div>
   </div>
 
@@ -312,10 +317,11 @@ const i18n = {
     mode_voice: "🎤 Voice", mode_text: "💬 Text",
     empty_text: "Hello, I'm Sheldon", empty_voice: "Switch to Text Mode to start typing",
     placeholder: "Ask Sheldon...",
-    voice_overlay: "ESP32 Listening... Switch to Text to type.",
-    esp32_badge: "ESP32 Active", alert_clear: "Clear all conversation history?",
+    voice_overlay: "ESP32 Listening... Switch to Text to type.", voice_overlay_offline: "Waiting for ESP32 hardware to connect...",
+    hardware_online: "ESP32 Online", hardware_offline: "ESP32 Offline", port_listening: "Port {port} Listening", port_starting: "Port {port} Starting",
+    alert_clear: "Clear all conversation history?", alert_hardware: "ESP32 must be online before text chat can be used.",
     alert_timeout: "Response timed out.", time_waiting: "Thinking...", time_responding: "Typing...", time_sending: "Sending...",
-    hint_disconnected: "Disconnected.", hint_idle: "Ready to help.", hint_recording: "Listening...",
+    hint_disconnected: "Browser connection disconnected.", hint_hardware_offline: "ESP32 offline; port remains listening.", hint_model_loading: "ESP32 online; loading its model configuration...", hint_idle: "Ready to help.", hint_recording: "Listening...",
     state: { disconnected: "Offline", idle: "Online", recording: "Listening...", sending: "Sending...", thinking: "Thinking...", responding: "Typing..." }
   },
   zh: {
@@ -323,10 +329,11 @@ const i18n = {
     mode_voice: "🎤 语音", mode_text: "💬 文本",
     empty_text: "你好，我是谢尔顿", empty_voice: "请切换到文本模式开始输入",
     placeholder: "给谢尔顿发送消息...",
-    voice_overlay: "ESP32 正在聆听... 切换到文本模式进行输入",
-    esp32_badge: "ESP32 待命", alert_clear: "确认清空所有对话记录？",
+    voice_overlay: "ESP32 正在聆听... 切换到文本模式进行输入", voice_overlay_offline: "正在等待 ESP32 硬件连接...",
+    hardware_online: "ESP32 在线", hardware_offline: "ESP32 离线", port_listening: "端口 {port} 监听中", port_starting: "端口 {port} 启动中",
+    alert_clear: "确认清空所有对话记录？", alert_hardware: "ESP32 上线后才能使用网页文本聊天",
     alert_timeout: "响应超时", time_waiting: "思考中...", time_responding: "正在回复...", time_sending: "发送中...",
-    hint_disconnected: "已断开连接", hint_idle: "随时准备帮忙", hint_recording: "正在聆听...",
+    hint_disconnected: "网页连接已断开", hint_hardware_offline: "ESP32 离线；服务端口仍保持监听", hint_model_loading: "ESP32 已上线；正在加载设备模型配置...", hint_idle: "随时准备帮忙", hint_recording: "正在聆听...",
     state: { disconnected: "离线", idle: "在线", recording: "聆听中...", sending: "发送中...", thinking: "思考中...", responding: "回复中..." }
   },
   ms: {
@@ -334,10 +341,11 @@ const i18n = {
     mode_voice: "🎤 Suara", mode_text: "💬 Teks",
     empty_text: "Hello, Saya Sheldon", empty_voice: "Tukar ke Mod Teks untuk menaip",
     placeholder: "Tanya Sheldon...",
-    voice_overlay: "ESP32 Mendengar... Tukar ke Teks untuk menaip.",
-    esp32_badge: "ESP32 Aktif", alert_clear: "Padam semua sejarah?",
+    voice_overlay: "ESP32 Mendengar... Tukar ke Teks untuk menaip.", voice_overlay_offline: "Menunggu perkakasan ESP32 disambungkan...",
+    hardware_online: "ESP32 Dalam Talian", hardware_offline: "ESP32 Luar Talian", port_listening: "Port {port} Mendengar", port_starting: "Port {port} Bermula",
+    alert_clear: "Padam semua sejarah?", alert_hardware: "ESP32 mesti dalam talian sebelum sembang teks boleh digunakan.",
     alert_timeout: "Maklum balas tamat masa.", time_waiting: "Berfikir...", time_responding: "Menaip...", time_sending: "Menghantar...",
-    hint_disconnected: "Terputus.", hint_idle: "Sedia membantu.", hint_recording: "Mendengar...",
+    hint_disconnected: "Sambungan pelayar terputus.", hint_hardware_offline: "ESP32 luar talian; port masih mendengar.", hint_model_loading: "ESP32 dalam talian; memuatkan konfigurasi model...", hint_idle: "Sedia membantu.", hint_recording: "Mendengar...",
     state: { disconnected: "Luar Talian", idle: "Dalam Talian", recording: "Mendengar...", sending: "Menghantar...", thinking: "Berfikir...", responding: "Menaip..." }
   }
 };
@@ -365,6 +373,7 @@ const cfgMode    = document.getElementById("cfg-mode");
 const cfgAdminLk = document.getElementById("cfg-admin-link");
 const clearBtn   = document.getElementById("clear-btn");
 const esp32Badge = document.getElementById("esp32-badge");
+const listenerBadge = document.getElementById("listener-badge");
 const modeBtn    = document.getElementById("mode-btn");
 const voiceOverlay= document.getElementById("voice-overlay");
 const voiceOverlayTxt = document.getElementById("voice-overlay-text");
@@ -397,8 +406,8 @@ function updateUIStrings() {
   uiTitle.textContent = t("title");
   clearBtn.textContent = t("btn_clear");
   cfgToggle.textContent = t("btn_config");
-  voiceOverlayTxt.textContent = t("voice_overlay");
-  esp32Badge.textContent = t("esp32_badge");
+  voiceOverlayTxt.textContent = t(hardwareOnline ? "voice_overlay" : "voice_overlay_offline");
+  updateHardwareBadges();
   
   if (currentMode === "text") {
     modeBtn.textContent = t("mode_voice");
@@ -428,10 +437,45 @@ if (!deviceId) {
 //  State machine
 // ─────────────────────────────────────────────
 let STATE = "disconnected";
+let hardwareOnline = false;
+let llmReady = false;
+let listenerState = "starting";
+let listenerPort = 8000;
+
+function chatReady() { return hardwareOnline && llmReady; }
+function formatStatus(key) { return t(key).replace("{port}", listenerPort); }
+
+function updateHardwareBadges() {
+  esp32Badge.className = "runtime-badge " + (hardwareOnline ? "online" : "offline");
+  esp32Badge.textContent = t(hardwareOnline ? "hardware_online" : "hardware_offline");
+  listenerBadge.className = "runtime-badge " + listenerState;
+  listenerBadge.textContent = formatStatus(listenerState === "listening" ? "port_listening" : "port_starting");
+}
+
+function applyHardwareStatus(status) {
+  const wasOnline = hardwareOnline;
+  const activeState = STATE;
+  hardwareOnline = !!status.online;
+  if (typeof status.llm_ready === "boolean") llmReady = status.llm_ready;
+  if (status.listener) listenerState = status.listener;
+  if (status.ws_port) listenerPort = status.ws_port;
+
+  if (!hardwareOnline && wasOnline) {
+    cancelResponseTimeout(); stopElapsedTimer(); finalizeBotBubble();
+    if (currentMode === "text") applyMode("voice", false);
+  }
+  updateUIStrings();
+  modeBtn.disabled = STATE === "disconnected" || !chatReady();
+  setState(
+    activeState === "disconnected"
+      ? "disconnected"
+      : (!hardwareOnline ? "idle" : activeState)
+  );
+}
 
 function setState(s) {
   STATE = s;
-  const locked = s !== "idle" || currentMode === "voice";
+  const locked = s !== "idle" || currentMode === "voice" || !chatReady();
   inputEl.disabled  = locked;
   
   const hasText = inputEl.value.trim().length > 0;
@@ -450,8 +494,12 @@ function setState(s) {
     startElapsedTimer();
   } else {
     stopElapsedTimer();
-    const hints = { disconnected: t("hint_disconnected"), idle: t("hint_idle"), recording: t("hint_recording") };
-    statusEl.textContent = hints[s] || "";
+    if (s !== "disconnected" && !hardwareOnline) statusEl.textContent = t("hint_hardware_offline");
+    else if (s !== "disconnected" && !llmReady) statusEl.textContent = t("hint_model_loading");
+    else {
+      const hints = { disconnected: t("hint_disconnected"), idle: t("hint_idle"), recording: t("hint_recording") };
+      statusEl.textContent = hints[s] || "";
+    }
   }
 }
 
@@ -617,6 +665,8 @@ function connect() {
     ws.onopen = () => {
       reconnectDelay = 1000;
       clearCountdown();
+      listenerState = "listening";
+      updateHardwareBadges();
       ws.send(JSON.stringify({
         type: "hello", version: 1, transport: "websocket",
         audio_params: {format:"opus", sample_rate:16000, channels:1, frame_duration:60}
@@ -694,17 +744,20 @@ function onMessage(ev) {
   switch (msg.type) {
     case "hello":
       setState("idle");          // always mark as connected (green dot)
-      modeBtn.disabled = false;
+      modeBtn.disabled = !chatReady();
       applyMode(currentMode);   // voice mode keeps inputs locked via setState logic
       _wasConnected = true;
+      break;
+    case "hardware_status":
+      applyHardwareStatus(msg);
       break;
     case "stt":
       if (STATE === "sending") setState("thinking");
       break;
     case "tts":
-      if (msg.state === "start") { setState("responding"); setEsp32Badge(true); armResponseTimeout(); } 
+      if (msg.state === "start") { setState("responding"); armResponseTimeout(); }
       else if (msg.state === "sentence_start" && msg.text) { appendBotChunk(msg.text); armResponseTimeout(); } 
-      else if (msg.state === "stop") { cancelResponseTimeout(); stopElapsedTimer(); finalizeBotBubble(); setEsp32Badge(false); setState("idle"); }
+      else if (msg.state === "stop") { cancelResponseTimeout(); stopElapsedTimer(); finalizeBotBubble(); setState("idle"); }
       break;
   }
 }
@@ -714,7 +767,7 @@ function onMessage(ev) {
 // ─────────────────────────────────────────────
 function sendText(text) {
   text = (text || "").trim();
-  if (!text || STATE !== "idle" || !ws || ws.readyState !== 1) return;
+  if (!text || STATE !== "idle" || !chatReady() || !ws || ws.readyState !== 1) return;
   const time = getTS();
   renderRow({role:"me", text, time}); pushHist({role:"me", text, time});
   inputEl.value = ""; inputEl.style.height = "auto";
@@ -750,8 +803,6 @@ inputEl.addEventListener("input", () => {
   setState(STATE); 
 });
 
-function setEsp32Badge(v) { esp32Badge.style.display = v ? "inline" : "none"; }
-
 // ─────────────────────────────────────────────
 //  Config & Mode & History
 // ─────────────────────────────────────────────
@@ -760,6 +811,12 @@ async function loadConfig() {
   try {
     const cfg = await fetch("/api/config").then(r => r.json());
     cfgMode.textContent = `Mode: ${cfg.mode === "manager-api" ? "Manager-API" : "Standalone"} • LLM: ${cfg.llm_ready ? "Online" : "Offline"}`;
+    applyHardwareStatus({
+      online: cfg.hardware_online,
+      llm_ready: cfg.llm_ready,
+      listener: cfg.websocket_listener?.state,
+      ws_port: cfg.websocket_listener?.port,
+    });
     cfgGrid.innerHTML = "";
     Object.entries({LLM:"LLM", TTS:"TTS", ASR:"ASR", Memory:"Memory", Intent:"Intent"}).forEach(([k, label]) => {
       const div = document.createElement("div"); div.className = "cfg-item";
@@ -770,6 +827,7 @@ async function loadConfig() {
   } catch {}
 }
 loadConfig();
+setInterval(loadConfig, 3000); // fallback if a proxy drops a pushed status frame
 
 clearBtn.addEventListener("click", () => {
   if (!confirm(t("alert_clear"))) return;
@@ -787,6 +845,10 @@ clearBtn.addEventListener("click", () => {
 // Mode is never restored from localStorage so every page open is clean.
 let currentMode = "voice";
 function applyMode(mode, sendToServer = true) {
+  if (mode === "text" && !chatReady()) {
+    showToast(t("alert_hardware"));
+    return;
+  }
   currentMode = mode;
   const isText = (mode === "text");
   

@@ -139,11 +139,11 @@ class AutoDeployTests(unittest.TestCase):
 
     def test_public_endpoints_skip_database_write_when_ip_matches(self):
         expected = {
-            "server.websocket": "ws://192.168.50.249:8000/xiaozhi/v1/",
-            "server.ota": "http://192.168.50.249:8002/xiaozhi/ota/",
+            "server.websocket": "ws://192.0.2.25:8000/xiaozhi/v1/",
+            "server.ota": "http://192.0.2.25:8002/xiaozhi/ota/",
         }
         with (
-            mock.patch.object(deploy, "lan_ip", return_value="192.168.50.249"),
+            mock.patch.object(deploy, "lan_ip", return_value="192.0.2.25"),
             mock.patch.object(
                 deploy,
                 "read_manager_param",
@@ -158,7 +158,7 @@ class AutoDeployTests(unittest.TestCase):
 
     def test_public_endpoints_replace_stale_ip(self):
         with (
-            mock.patch.object(deploy, "lan_ip", return_value="192.168.50.249"),
+            mock.patch.object(deploy, "lan_ip", return_value="192.0.2.25"),
             mock.patch.object(
                 deploy, "read_manager_param", return_value="http://192.168.1.8/"
             ),

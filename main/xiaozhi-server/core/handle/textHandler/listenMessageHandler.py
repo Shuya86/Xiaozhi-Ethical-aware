@@ -1,3 +1,4 @@
+import json
 import time
 from typing import Dict, Any
 
@@ -18,6 +19,16 @@ class ListenTextMessageHandler(TextMessageHandler):
         return TextMessageType.LISTEN
 
     async def handle(self, conn, msg_json: Dict[str, Any]) -> None:
+        # Keep the browser WebSocket connected for live status updates, but do
+        # not accept chat input unless a physical ESP32 connection is live.
+        if conn.is_web_connection and (
+            conn.server is None
+            or not conn.server.hardware_status()["llm_ready"]
+        ):
+            if conn.server is not None:
+                await conn.websocket.send(json.dumps(conn.server.hardware_status()))
+            return
+
         if "mode" in msg_json:
             conn.client_listen_mode = msg_json["mode"]
             conn.logger.bind(tag=TAG).debug(

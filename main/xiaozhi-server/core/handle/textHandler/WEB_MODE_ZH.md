@@ -60,9 +60,20 @@ ws://<host>:8000/xiaozhi/v1/?device-id=web-<随机值>
 {"type": "listen", "state": "detect", "text": "你好"}
 ```
 
-服务器使用最近一次在线 ESP32 提供的 LLM 和系统提示词处理消息，并通过
-原有的 `stt`、`tts` 消息返回状态与分段文本。如果 ESP32 尚未上线，服务
-器不会创建默认 LLM，也不会处理聊天请求。
+服务器使用当前在线 ESP32 提供的 LLM 和系统提示词处理消息，并通过原有
+的 `stt`、`tts` 消息返回状态与分段文本。如果 ESP32 已离线，网页
+WebSocket 仍保持连接以接收状态，但服务器不会处理聊天请求。
+
+## 硬件状态消息
+
+ESP32 上线或离线时，服务器会立即向所有网页连接推送：
+
+```json
+{"type":"hardware_status","online":true,"connection_count":1,"llm_ready":true,"listener":"listening","ws_port":8000}
+```
+
+状态中不包含设备 ID、IP 或密钥。异常断网由服务端 WebSocket Ping/Pong
+检测；设备离线时监听端口仍保持打开。
 
 ## 保活
 
